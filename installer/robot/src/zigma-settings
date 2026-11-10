@@ -1,0 +1,79 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'zigma-settings V1.2 (packaged 2026-11-08T20:48:10+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Settings adapter for both reviewed layouts, including a clean installation.
+set -eu
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+export PATH
+unset TZ
+case "${1:-}" in
+ get)
+  host=$(hostname)
+  zone=$(readlink /root/etc/localtime 2>/dev/null || true)
+  zone=${zone#/usr/share/zoneinfo/}
+  case "$host" in ''|*[!a-zA-Z0-9-]*) host=unknown;; esac
+  case "$zone" in ''|*[!a-zA-Z0-9_+/-]*) zone=UTC;; esac
+  server=time.google.com
+  [ ! -f /root/etc/ntp-server ] || server=$(cat /root/etc/ntp-server)
+  case "$server" in ''|-*|*[!a-zA-Z0-9.-]*) server=unknown;; esac
+  sync=$(cat /tmp/zigma-time-sync.result 2>/dev/null || echo idle)
+  case "$sync" in requested|running|success|failed) :;; *) sync=idle;; esac
+  enabled=false
+  if grep -q '^[^#].*zigma-time-sync daily' /root/etc/crontabs/root 2>/dev/null; then enabled=true; fi
+  printf '{"hostname":"%s","timezone":"%s","epoch":%s,"local_datetime":"%s","ntp_enabled":%s,"ntp_server":"%s","ntp_sync_status":"%s"}\n' "$host" "$zone" "$(date +%s)" "$(date +%Y-%m-%dT%H:%M:%S)" "$enabled" "$server" "$sync"
+  ;;
+ name)
+  value=${2:-}
+  case "$value" in ''|-*|*-|*[!a-z0-9-]*) exit 2;; esac
+  test ${#value} -le 63
+  old=$(hostname)
+  printf '%s\n' "$value" > /root/hostname.zigma-new
+  chmod 644 /root/hostname.zigma-new
+  mv /root/hostname.zigma-new /root/hostname
+  if ! hostname "$value"; then printf '%s\n' "$old" > /root/hostname; exit 1; fi
+  ;;
+ timezone)
+  value=${2:-}
+  case "$value" in ''|/*|*..*|*[!a-zA-Z0-9_+/-]*) exit 2;; esac
+  test -f "/usr/share/zoneinfo/$value"
+  # Validate restart support before changing the timezone. Lock only this edit.
+  test -x /root/etc/init.d/S97crond
+  exec 8>/tmp/zigma-timezone.lock
+  flock -n 8 || exit 3
+  if [ "$(readlink /root/etc/localtime 2>/dev/null || true)" = "/usr/share/zoneinfo/$value" ]; then exit 0; fi
+  old=/root/etc/localtime.zigma-old
+  test ! -e "$old" && test ! -L "$old"
+  present=0
+  if test -e /root/etc/localtime || test -L /root/etc/localtime; then
+   cp -P /root/etc/localtime "$old"; present=1
+  fi
+  ln -s "/usr/share/zoneinfo/$value" /root/etc/localtime.zigma-new
+  mv -f /root/etc/localtime.zigma-new /root/etc/localtime
+  if ! /root/etc/init.d/S97crond restart 8>&-; then
+   rm -f /root/etc/localtime
+   test "$present" = 0 || mv "$old" /root/etc/localtime
+   /root/etc/init.d/S97crond start 8>&- || true
+   exit 1
+  fi
+  rm -f "$old"
+  ;;
+ ntp_server)
+  value=${2:-}
+  case "$value" in ''|-*|*[!a-zA-Z0-9.-]*) exit 2;; esac
+  test ${#value} -le 253
+  printf '%s\n' "$value" > /root/etc/ntp-server.zigma-new
+  mv /root/etc/ntp-server.zigma-new /root/etc/ntp-server
+  ;;
+ ntp_sync)
+  test -x /root/bin/zigma-time-sync
+  test -x /usr/bin/ntpdate
+  [ ! -d /tmp/zigma-time-sync.lock ] || exit 3
+  printf requested > /tmp/zigma-time-sync.result
+  nohup /root/bin/zigma-time-sync manual </dev/null >/dev/null 2>&1 &
+  ;;
+ clock) exit 2 ;;
+ *) exit 2;;
+esac

@@ -1,0 +1,193 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'zigma-mode-backend V1.2 (packaged 2026-11-07T17:42:26+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Robot operations for the selector coordinator. No reboot or motion commands.
+set -eu
+PATH=/bin:/usr/bin:/sbin:/usr/sbin:/root/bin
+export PATH
+umask 077
+action=${1:-};base=${2:-/root/zigma-free};runtime=${3:-/tmp/zigma-mode}
+marker=${4:-/root/zigma-free/local-mode.lock}
+for path in "$base" "$runtime" "$marker"; do
+ case "$path" in /*) :;; *) exit 2;; esac
+ case "$path" in *[!a-zA-Z0-9_./-]*) exit 2;; esac
+done
+mkdir -p "$runtime"
+# Kernel mutexes recover after abrupt death; no stale mkdir lock to strand mode.
+exec 8>"$runtime/transition.flock"
+attempt=0
+while ! flock -n 8;do
+ attempt=$((attempt+1));[ "$attempt" -lt 40 ] || exit 1
+ sleep 1 8>&-
+done
+start() { awk '{print $22}' "/proc/$1/stat" 2>/dev/null; }
+alive() {
+ [ -r "/proc/$1/stat" ] || return 1
+ process_state=$(awk '{print $3}' "/proc/$1/stat" 2>/dev/null) || return 1
+ [ -n "$process_state" ] && [ "$process_state" != Z ]
+}
+verify() {
+ p=$1;expected=$2
+ case "$p" in ''|*[!0-9]*) return 1;; esac
+ [ "/proc/$p/exe" -ef "$expected" ]
+}
+stop_exact() {
+ p=$1;expected=$2;tick=$3
+ alive "$p" || return 0
+ verify "$p" "$expected" || return 1
+ [ "$(start "$p")" = "$tick" ] || return 1
+ kill -TERM "$p";i=0
+ while alive "$p";do
+  # A reused PID is no longer ours; never wait on or signal its new owner.
+  [ "$(start "$p")" = "$tick" ] || return 0
+  i=$((i+1));if [ "$i" -ge 8 ];then
+   verify "$p" "$expected" && [ "$(start "$p")" = "$tick" ] || return 0
+   kill -KILL "$p";sleep 1 8>&-;alive "$p" && return 1;break
+  fi
+  sleep 1 8>&-
+ done
+}
+single() {
+ name=$1;expected=$2
+ ids=$(pidof "$name" || true)
+ set -- $ids
+ [ $# -le 1 ] || return 1
+ [ $# = 0 ] || verify "$1" "$expected"
+}
+stop_named() {
+ name=$1;expected=$2
+ single "$name" "$expected" || return 1
+ ids=$(pidof "$name" || true)
+ [ -z "$ids" ] || stop_exact "$ids" "$expected" "$(start "$ids")"
+}
+stop_identity() {
+ file=$1;expected=$2
+ if [ -f "$file" ]; then
+  read -r p tick < "$file"
+  # Stale registry entries are not permission to signal a reused process.
+  if [ "$(start "$p" || true)" = "$tick" ] && verify "$p" "$expected";then
+   stop_exact "$p" "$expected" "$tick" || return 1
+  fi
+  rm -f "$file"
+ fi
+}
+start_trial_observer() {
+ # Optional staged single-publisher handover, enabled only with captured original
+ # argv/identity. Existing network/core trials without these files are unchanged.
+ [ -f "$runtime/observer.original.args" ] || return 0
+ [ -x "$base/zigma-observe-arm" ]
+ stop_identity "$runtime/observer.original.identity" /root/zigma-free/zigma-observe-arm
+ app=$(pidof wifi_app_server_grit);nav=$(pidof demo_rplidar)
+ nohup nice -n 10 "$base/zigma-observe-arm" /tmp/zigma-free/observation /tmp/app_server.log --app-server-pid "$app" --nav-pid "$nav" --core-dir /tmp/zigma-core --core-exe "$base/zigma-core-arm" >"$runtime/observer.log" 2>&1 </dev/null 8>&- &
+ p=$!
+ printf '%s %s\n' "$p" "$(start "$p")" > "$runtime/observer.identity"
+ printf '%s\n' "$p" > /tmp/zigma-free/observe.pid
+}
+restore_observer() {
+ [ -f "$runtime/observer.original.args" ] || return 0
+ stop_identity "$runtime/observer.identity" "$base/zigma-observe-arm"
+ p=$(cat /tmp/zigma-free/observe.pid)
+ if verify "$p" /root/zigma-free/zigma-observe-arm && alive "$p";then return 0;fi
+ [ -z "$(pidof zigma-observe-arm || true)" ] || return 1
+ set --
+ while IFS= read -r argument;do set -- "$@" "$argument";done < "$runtime/observer.original.args"
+ [ "${1:-}" = /root/zigma-free/zigma-observe-arm ] || return 1
+ nohup nice -n 10 "$@" >/tmp/zigma-free/observer.log 2>&1 </dev/null 8>&- &
+ printf '%s\n' "$!" > /tmp/zigma-free/observe.pid
+}
+native_health() {
+ single wifi_app_server_grit /root/app_server/wifi_app_server_grit &&
+ single demo_rplidar /root/hoslam/demo_rplidar &&
+ [ -n "$(pidof wifi_app_server_grit || true)" ] && [ -n "$(pidof demo_rplidar || true)" ]
+}
+stop_local_core() {
+ stop_identity "$runtime/core.identity" "$base/zigma-core-arm"
+ stop_named zigma-core-arm "$base/zigma-core-arm"
+}
+stop_local_network() {
+ stop_identity "$runtime/network.identity" "$base/zigma-network-arm"
+ stop_named zigma-network-arm "$base/zigma-network-arm"
+}
+case "$action" in
+ vendor-health)
+  [ ! -e "$marker" ] && [ ! -L "$marker" ]
+  single ygclient /root/yg/ygclient && single daemon /root/app_server/daemon &&
+  [ -n "$(pidof ygclient || true)" ] && [ -n "$(pidof daemon || true)" ]
+ ;;
+ native-health) native_health;;
+ enforce-local)
+  [ -f "$marker" ] && [ ! -L "$marker" ]
+  stop_named daemon /root/app_server/daemon
+  stop_named ygclient /root/yg/ygclient
+ ;;
+ stop-core) [ -f "$marker" ] && [ ! -L "$marker" ];stop_local_core;;
+ stop-network) [ -f "$marker" ] && [ ! -L "$marker" ];stop_local_network;;
+ web-repair)
+  [ -f "$marker" ] && [ ! -L "$marker" ]
+  if [ -x "$base/zigma-free-service" ];then
+   native_health
+   if ! "$base/zigma-free-service" status >/dev/null 2>&1 8>&-;then
+    "$base/zigma-free-service" repair >"$runtime/web-repair.log" 2>&1 8>&-
+   elif ! "$base/zigma-core-arm" --check-health /tmp/zigma-free/observation/status.json --check-exe "$base/zigma-observe-arm";then
+    "$base/zigma-free-service" repair-observer >"$runtime/web-repair.log" 2>&1 8>&-
+   elif "$base/zigma-core-arm" --check-web 8765;then
+    rm -f "$runtime/web.failures"
+   else
+    failures=$(cat "$runtime/web.failures" 2>/dev/null || echo 0)
+    failures=$((failures+1));printf '%s\n' "$failures" >"$runtime/web.failures"
+    if [ "$failures" -ge 3 ];then
+     "$base/zigma-free-service" repair-web >"$runtime/web-repair.log" 2>&1 8>&-
+     rm -f "$runtime/web.failures"
+    fi
+   fi
+  fi
+ ;;
+ native-recover)
+  [ -f "$marker" ] && [ ! -L "$marker" ]
+  single wifi_app_server_grit /root/app_server/wifi_app_server_grit
+  single demo_rplidar /root/hoslam/demo_rplidar
+  if [ -z "$(pidof wifi_app_server_grit || true)" ];then
+   /root/etc/init.d/S50app start >/dev/null 2>&1 8>&-
+  fi
+  if [ -n "$(pidof wifi_app_server_grit || true)" ] && [ -z "$(pidof demo_rplidar || true)" ];then
+   /root/etc/init.d/S51hoslam start >/dev/null 2>&1 8>&-
+  fi
+ ;;
+ prepare-local)
+  [ -f "$marker" ] && [ ! -L "$marker" ]
+  # Validate all targets before terminating any of them.
+  single daemon /root/app_server/daemon
+  single ygclient /root/yg/ygclient
+  single wpa_supplicant /root/bin/wpa_supplicant
+  single udhcpc /bin/busybox
+  if [ -n "$(pidof ygclient daemon || true)" ];then
+   [ -n "$(pidof wifi_app_server_grit || true)" ]
+   [ -n "$(pidof demo_rplidar || true)" ]
+   grep -Eq '"working_status":"(PileCharging|DirCharging|Standby|Hibernating)"' /tmp/zigma-free/observation/status.json
+   grep -q '"error":"NoError"' /tmp/zigma-free/observation/status.json
+  fi
+  stop_named daemon /root/app_server/daemon
+  stop_named ygclient /root/yg/ygclient
+  stop_named udhcpc /bin/busybox
+  stop_named wpa_supplicant /root/bin/wpa_supplicant
+  start_trial_observer
+  ;;
+ recover)
+  [ ! -e "$marker" ] && [ ! -L "$marker" ]
+  stop_local_core
+  restore_observer
+  stop_local_network
+  single ygclient /root/yg/ygclient
+  if [ -z "$(pidof ygclient || true)" ]; then
+   /root/etc/init.d/S70yg start >/dev/null 2>&1 8>&-
+  fi
+  i=0
+  while [ -z "$(pidof ygclient || true)" ]; do i=$((i+1));[ "$i" -lt 8 ] || exit 1;sleep 1;done
+  single daemon /root/app_server/daemon
+  if [ -z "$(pidof daemon || true)" ]; then /root/etc/init.d/S99daemon start >/dev/null 2>&1 8>&-;fi
+  ;;
+ *) exit 2;;
+esac

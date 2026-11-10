@@ -1,0 +1,13 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'S98zigma-free V1.1 (packaged 2026-10-28T08:30:44+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Start only Zigma Free; never restart vendor processes.
+case "$1" in
+ start) /root/zigma-free/zigma-free-service boot ;;
+ stop) /root/zigma-free/zigma-free-service stop ;;
+ restart|reload) /root/zigma-free/zigma-free-service stop && /root/zigma-free/zigma-free-service boot ;;
+ *) exit 2;;
+esac

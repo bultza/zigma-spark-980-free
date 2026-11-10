@@ -1,0 +1,246 @@
+#!/bin/sh
+# Zigma modular installer. Generated locally; no firmware images or vendor payloads.
+set -eu
+umask 077
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+export PATH
+profile=@@PROFILE@@
+requested_profile=$profile
+key=@@PUBLIC_KEY@@
+server=@@SERVER_BASE@@
+bundle_sha=@@BUNDLE_SHA@@
+bundle_kib=@@BUNDLE_KIB@@
+payload_kib=@@PAYLOAD_KIB@@
+stack_kib=@@STACK_KIB@@
+robot_name=@@ROBOT_NAME@@
+install_hostname=@@HOSTNAME@@
+action=${1:-install}
+fail() { echo "ERROR: $*" >&2; exit 1; }
+sha() { sha256sum "$1" | cut -d ' ' -f 1; }
+free_kib() { df -Pk "$1" | awk 'END {print $4}'; }
+safe_dir() { test ! -L "$1" || fail "Symlink directory: $1"; test ! -e "$1" || test -d "$1" || fail "Not a directory: $1"; }
+for tool in id cat awk sha256sum cut df uname cmp grep mkdir cp mv chmod flock sync mktemp pidof date rm dirname; do
+ command -v "$tool" >/dev/null || fail "Missing tool: $tool"
+done
+case "$action" in install|--check) :;;*) fail 'Usage: install.sh [--check]';;esac
+test "$(id -u)" = 0 || fail 'Root required'
+case "$(uname -m)" in arm*) :;;*) fail 'ARM robot required';;esac
+layout=$(awk 'NR>1 {gsub(/"/,"",$4); printf "%s:%s;",$4,$2}' /proc/mtd)
+case "$layout" in
+ 'uboot:00100000;dtb:00010000;kernel:00300000;rootfs:00600000;data:015f0000;') layout=direct;;
+ 'uboot:00050000;dtb:00010000;kernel:00300000;rootfs:00800000;data:004a0000;firmware:01000000;') layout=overlay;;
+ *) layout=unknown;;
+esac
+# SSH compatibility is independent of vendor navigation/network versions.
+# The reviewed boot dispatcher is the only version-bound requirement for persistence.
+test -x /usr/sbin/dropbear || fail 'No executable Dropbear; cannot install SSH'
+test "$(sha /etc/init.d/S70user)" = dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4 || fail 'SSH persistence dispatcher is unreviewed; inspect startup before adding a boot service'
+test "$(sha /etc/inittab)" = 1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4 || fail 'SSH boot chain is unreviewed; inspect init before changing startup'
+if test "$(sha /usr/sbin/dropbear)" != 4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06; then
+ echo 'Unreviewed Dropbear hash; checking executable capabilities instead'
+ dropbear_help=$(/usr/sbin/dropbear -h 2>&1 || :)
+ for flag in R s g j k p; do
+  printf '%s\n' "$dropbear_help" | grep -Eq "(^|[[:space:]])-$flag([[:space:][:punct:]]|$)" || fail "Dropbear lacks required -$flag option"
+ done
+fi
+if test "$layout" = unknown; then
+ awk '$2=="/root" {seen=1; direct=($3=="jffs2" && $4 ~ /(^|,)rw(,|$)/)} $2=="/" && $3=="overlay" {overlay=1} $2=="/overlay" && $3=="jffs2" && $4 ~ /(^|,)rw(,|$)/ {backing=1} END{exit !(seen ? direct : overlay && backing)}' /proc/mounts || fail 'Cannot establish persistent storage for SSH on this unknown layout'
+fi
+# Other hashes decide tools/full compatibility, not SSH access.
+@@FIRMWARE_CHECKS@@
+if test "$profile" != ssh;then
+ for tool in wget tar;do command -v "$tool" >/dev/null || fail "Missing tool: $tool";done
+fi
+for dir in /root /root/.ssh /root/etc /root/etc/init.d /root/.zigma-install; do safe_dir "$dir";done
+targets='/root/.ssh/authorized_keys /root/etc/init.d/S98dropbear'
+if test "$profile" != ssh;then safe_dir /root/bin; targets="$targets /root/bin/zigmactl";fi
+for file in $targets;do
+ test ! -L "$file" || fail "Conflicting symlink: $file"
+ test ! -e "$file" || test -f "$file" || fail "Conflicting target: $file"
+done
+if test -e /root/etc/init.d/S98dropbear;then
+ grep -qx '# zigma-modular-ssh-v1' /root/etc/init.d/S98dropbear || fail 'Existing SSH startup needs review; preserved'
+elif pidof dropbear >/dev/null 2>&1;then
+ fail 'Unmanaged SSH daemon already running; preserved'
+fi
+store=/root/zigma-free
+mountpoint=/root
+if test "$layout" = overlay && test "$profile" = full;then
+ mountpoint=/root/firmware/arobot
+ safe_dir /root/firmware;safe_dir "$mountpoint"
+ awk '$1=="/dev/mtdblock5" && $2=="/root/firmware/arobot" && $3=="jffs2" {ok=1} END{exit !ok}' /proc/mounts || fail 'Firmware mount does not match reviewed layout'
+ store=$mountpoint/zigma-free
+elif test "$layout" = direct;then
+ awk '$1=="/dev/mtdblock4" && $2=="/root" && $3=="jffs2" {ok=1} END{exit !ok}' /proc/mounts || fail 'Data mount does not match reviewed layout'
+fi
+already=0
+if test "$profile" = full;then
+ for command in /usr/bin/ntpdate /usr/bin/crontab /usr/sbin/crond; do
+  test -x "$command" || fail "Missing full-profile dependency: $command"
+ done
+ for dir in /root/etc/crontabs; do safe_dir "$dir"; done
+ for path in /root/hostname /root/.profile /root/etc/crontabs/root /root/bin/zigma-time-sync /root/etc/init.d/S01time /root/etc/init.d/S03zigma-hostname /root/etc/init.d/S96ntpsync /root/etc/init.d/S97crond; do
+  test ! -L "$path" || fail "Conflicting support symlink: $path"
+  test ! -e "$path" || test -f "$path" || fail "Conflicting support target: $path"
+ done
+ for dir in "$store" /root/zigma-free /root/zigma-free-master-maps;do safe_dir "$dir";done
+ if test -e "$store";then
+  test -f "$store/installer-bundle.sha256" && test "$(cat "$store/installer-bundle.sha256")" = "$bundle_sha" || fail 'Existing stack differs; use a reviewed update, not clean installation'
+  already=1
+ else
+  for path in /root/etc/init.d/S02zigma-storage /root/etc/init.d/S98zigma-free /root/etc/init.d/S98zigma-mode /root/zigma-free-master-maps;do
+   test ! -e "$path" && test ! -L "$path" || fail "Preexisting full-stack target: $path"
+  done
+  if test "$store" != /root/zigma-free;then test ! -e /root/zigma-free || fail 'Existing stack mountpoint';fi
+ fi
+fi
+# Reserve space for rollback, temporary file replacement and later user data.
+required=256
+test "$profile" = ssh || required=2304
+if test "$profile" = full && test "$layout" = direct && test "$already" = 0;then required=$((required+stack_kib));fi
+data_free=$(free_kib /root)
+echo "Space: /root available=${data_free} KiB required=${required} KiB"
+test "$data_free" -ge "$required" || fail "Insufficient data space (available ${data_free} KiB, need ${required} KiB); choose a smaller profile"
+if test "$profile" = full && test "$already" = 0;then
+ stack_required=$((stack_kib+2048))
+ stack_free=$(free_kib "$mountpoint")
+ echo "Space: $mountpoint available=${stack_free} KiB stack=${stack_kib} KiB reserve=2048 KiB required=${stack_required} KiB"
+ test "$stack_free" -ge "$stack_required" || fail "Insufficient stack space with reserve (available ${stack_free} KiB, need ${stack_required} KiB)"
+fi
+temporary_kib=1024
+if test "$profile" != ssh;then temporary_kib=$((bundle_kib+payload_kib+8192));fi
+test "$(free_kib /tmp)" -ge "$temporary_kib" || fail 'Insufficient temporary filesystem space'
+ram_kib=$(awk '/^MemAvailable:/ {available=$2} /^MemFree:/ {free=$2} END {print available ? available : free+0}' /proc/meminfo)
+test "$ram_kib" -ge "$temporary_kib" || fail 'Insufficient available RAM with 8 MiB reserve' 
+echo "Plan: profile=$profile layout=$layout store=$store already=$already; vendor binaries preserved"
+test "$action" != --check || exit 0
+mkdir -p /root/.zigma-install
+exec 9>/root/.zigma-install/lock
+flock -n 9 || fail 'Another installation is running'
+# A previous interrupted mutation must be resolved before a new transaction.
+test ! -e /root/.zigma-install/pending || fail 'Interrupted installation: inspect pending transaction and run its rollback.sh'
+stage=$(mktemp -d /tmp/zigma-install.XXXXXX)
+trap 'rm -rf "$stage"' EXIT
+if test "$profile" != ssh;then
+ wget -q -T 30 -O "$stage/bundle.tar.gz" "$server/bundle.tar.gz"
+ test "$(sha "$stage/bundle.tar.gz")" = "$bundle_sha" || fail 'Bundle hash mismatch'
+ mkdir "$stage/payload"
+ tar -xzf "$stage/bundle.tar.gz" -C "$stage/payload"
+ (cd "$stage/payload"; test ! -s SHA256SUMS || sha256sum -c SHA256SUMS)
+ rm "$stage/bundle.tar.gz"
+fi
+tx=/root/.zigma-install/transaction-$(date +%s)-$$
+mkdir "$tx"; : >"$tx/paths"
+cat >"$tx/rollback.sh" <<'ROLLBACK'
+#!/bin/sh
+# Restore only files changed by this transaction. Inspect before manual reuse.
+set -eu
+umask 077
+tx=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+# Refuse to overwrite data changed after installation (especially SSH keys).
+while read -r state path installed previous;do
+ test ! -L "$path" || { echo "Changed target: $path" >&2;exit 1; }
+ if test -e "$path";then
+  current=$(sha256sum "$path" | cut -d ' ' -f 1)
+  test "$current" = "$installed" || test "$current" = "$previous" || { echo "Modified since installation: $path" >&2;exit 1; }
+ fi
+done <"$tx/paths"
+while read -r state path installed previous;do
+ test -n "$path" || continue
+ case "$path" in /root/*) :;;*) exit 1;;esac
+ if test "$state" = old;then
+  cp -p "$tx/old$path" "$path.zigma-restore"
+  mv -f "$path.zigma-restore" "$path"
+ else rm -f "$path";fi
+ rm -f "$path.zigma-new"
+done <"$tx/paths"
+sync
+if test "$(cat /root/.zigma-install/pending 2>/dev/null || true)" = "$tx";then rm -f /root/.zigma-install/pending;fi
+echo 'Changed files restored; any staged stack is retained for inspection. No services were killed.'
+ROLLBACK
+chmod 700 "$tx/rollback.sh"
+printf '%s\n' "$tx" >/root/.zigma-install/pending
+committed=0
+cleanup() {
+ rc=$?
+ trap - EXIT
+ if test "$committed" = 0;then
+  echo "Installation failed. Restoring changed files; evidence: $tx" >&2
+  sh "$tx/rollback.sh" || echo "Manual recovery required: $tx/rollback.sh" >&2
+ fi
+ rm -rf "$stage"
+ exit "$rc"
+}
+trap cleanup EXIT
+replace() {
+ source=$1;target=$2;mode=$3
+ test ! -L "$target" || fail "Symlink target: $target"
+ if test -e "$target";then
+  test -f "$target" || fail "Not a regular file: $target"
+  if cmp -s "$source" "$target";then return;fi
+  mkdir -p "$tx/old$(dirname "$target")"
+  cp -p "$target" "$tx/old$target"
+  printf 'old %s %s %s\n' "$target" "$(sha "$source")" "$(sha "$target")" >>"$tx/paths"
+ else printf 'new %s %s -\n' "$target" "$(sha "$source")" >>"$tx/paths";fi
+ sync
+ cp "$source" "$target.zigma-new";chmod "$mode" "$target.zigma-new"
+ mv -f "$target.zigma-new" "$target"
+}
+mkdir -p /root/.ssh /root/etc/init.d /root/bin
+chmod 700 /root/.ssh
+if test -f /root/.ssh/authorized_keys;then cp /root/.ssh/authorized_keys "$stage/keys";else : >"$stage/keys";fi
+if ! awk -v k="$key" '$1" "$2==k {found=1} END {exit !found}' "$stage/keys";then printf '\n%s\n' "$key" >>"$stage/keys";fi
+replace "$stage/keys" /root/.ssh/authorized_keys 600
+cat >"$stage/ssh-init" <<'SSH_INIT'
+#!/bin/sh
+# zigma-modular-ssh-v1
+case "${1:-}" in
+ start|restart|reload)
+  test -s /root/.ssh/authorized_keys || exit 1
+  pidof dropbear >/dev/null 2>&1 && exit 0
+  /usr/sbin/dropbear -R -s -g -j -k -p 22 9>&-
+ ;;
+ stop) :;;
+ *) exit 2;;
+esac
+SSH_INIT
+replace "$stage/ssh-init" /root/etc/init.d/S98dropbear 700
+if test "$profile" != ssh;then
+ replace "$stage/payload/tools/zigmactl" /root/bin/zigmactl 700
+ replace "$stage/payload/tools/zigmactl-LICENSE-cJSON.txt" /root/bin/zigmactl-LICENSE-cJSON.txt 644
+fi
+if test "$profile" = full && test "$already" = 0;then
+ test "$layout" != overlay || mount -o remount,rw "$mountpoint"
+ mkdir "$store"
+ cp -R "$stage/payload/stack/." "$store/"
+ mkdir -p "$store/vendor-init" "$store/data/master-maps" "$store/data/core-records" "$store/songs" "$store/install-init"
+ for name in S70yg S99daemon;do
+  test -f "/root/etc/init.d/$name" && test ! -L "/root/etc/init.d/$name"
+  cp -p "/root/etc/init.d/$name" "$store/vendor-init/$name"
+ done
+ cp /etc/inittab "$store/vendor-init/inittab.original"
+ cp "$stage/payload/init/S98zigma-free" "$store/install-init/S98zigma-free"
+ printf 'robot_name=%s\n' "$robot_name" >"$store/device.conf"
+ printf '%s\n' "$bundle_sha" >"$store/installer-bundle.sha256"
+ printf '%s\n' "$layout" >"$store/installer-layout"
+ if test "$layout" = overlay;then
+  replace "$stage/payload/init/S02zigma-storage" /root/etc/init.d/S02zigma-storage 700
+  /root/etc/init.d/S02zigma-storage start
+ else
+  mkdir /root/zigma-free-master-maps
+ fi
+ support_dir=$stage/payload/support
+ . "$support_dir/configure-support.sh"
+ configure_support
+ # Staging does not switch networking or start the web. Time/identity init is prepared.
+ echo 'Full stack staged. After verifying SSH: /root/zigma-free/activate start'
+fi
+/root/etc/init.d/S98dropbear start 9>&-
+pidof dropbear >/dev/null || fail 'SSH daemon did not stay running'
+sync
+printf '%s\n' "$profile" >"$tx/completed-profile"
+printf '%s\n%s\n%s\n' "$bundle_sha" "$requested_profile" "$profile" >"$tx/session-result"
+rm /root/.zigma-install/pending
+sync
+committed=1
+echo "Installation complete: $profile. Verify key login and cold boot manually. Rollback record: $tx"

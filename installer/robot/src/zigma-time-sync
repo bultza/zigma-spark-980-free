@@ -1,0 +1,76 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'zigma-time-sync V1.1 (packaged 2026-10-28T08:30:44+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Existing ntpdate, no resident daemon. Logs/status live in RAM only.
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/root/bin
+export PATH
+mode=${1:-daily}
+case "$mode" in
+    boot) sleep 30; attempts=10; step=-b ;;
+    daily|manual) attempts=1; step= ;;
+    *) echo 'Usage: zigma-time-sync boot|daily|manual' >&2; exit 2 ;;
+esac
+
+server=time.google.com
+[ ! -f /root/etc/ntp-server ] || server=$(cat /root/etc/ntp-server)
+case "$server" in ''|-*|*[!a-zA-Z0-9.-]*) exit 2;; esac
+lock=/tmp/zigma-time-sync.lock
+mkdir "$lock" 2>/dev/null || exit 3
+printf running > /tmp/zigma-time-sync.result
+child=
+watchdog=
+cleanup() {
+    [ -z "$watchdog" ] || kill "$watchdog" 2>/dev/null || :
+    [ -z "$child" ] || kill "$child" 2>/dev/null || :
+    [ "$(cat /tmp/zigma-time-sync.result 2>/dev/null)" != running ] || printf failed > /tmp/zigma-time-sync.result
+    rmdir "$lock" 2>/dev/null || :
+}
+trap cleanup 0
+trap 'exit 1' 1 2 15
+exec > /tmp/zigma-time-sync.log 2>&1
+printf 'mode=%s start=%s uptime=%s\n' "$mode" "$(date -Iseconds)" "$(cat /proc/uptime)"
+attempt=1
+while [ "$attempt" -le "$attempts" ]; do
+    printf 'attempt=%s uptime=%s\n' "$attempt" "$(cat /proc/uptime)"
+    # -u: unprivileged source UDP port; -t: response timeout per server.
+    # Watchdog also bounds DNS resolution, which -t alone does not cover.
+    /usr/bin/ntpdate -u -p 1 -t 3 $step "$server" &
+    child=$!
+    (
+        timer=
+        trap '[ -z "$timer" ] || kill "$timer" 2>/dev/null; exit 0' 15
+        sleep 20 &
+        timer=$!
+        wait "$timer"
+        kill "$child" 2>/dev/null || :
+    ) &
+    watchdog=$!
+    wait "$child"
+    result=$?
+    child=
+    kill "$watchdog" 2>/dev/null || :
+    wait "$watchdog" 2>/dev/null || :
+    watchdog=
+    if [ "$result" -eq 0 ]; then
+        # Keep RTC in UTC; S01time restores it before the vendor client starts.
+        rtc=ok
+        /bin/busybox hwclock -u -w || rtc=failed
+        # One small persistent write per success; RTC may reset on power loss.
+        saved=/root/etc/ntp-last-epoch
+        date +%s > "$saved.new" && mv "$saved.new" "$saved"
+        printf 'mode=%s time=%s uptime=%s rtc=%s boot_id=%s\n' \
+            "$mode" "$(date -Iseconds)" "$(cat /proc/uptime)" "$rtc" \
+            "$(cat /proc/sys/kernel/random/boot_id)" > /tmp/zigma-time-sync.last-success
+        cat /tmp/zigma-time-sync.last-success
+        [ "$rtc" = ok ] || exit 1
+        printf success > /tmp/zigma-time-sync.result
+        exit 0
+    fi
+    printf 'ntpdate failed: status=%s\n' "$result"
+    [ "$attempt" -ge "$attempts" ] || sleep 30
+    attempt=$((attempt + 1))
+done
+exit 1

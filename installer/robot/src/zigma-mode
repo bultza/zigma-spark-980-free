@@ -1,0 +1,210 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'zigma-mode V1.1 (packaged 2026-10-28T08:30:44+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Local/vendor coordinator, resident supervisor and independent bounded watchdog.
+set -eu
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+LD_LIBRARY_PATH=/root/lib:/lib:/usr/lib
+export PATH LD_LIBRARY_PATH
+umask 077
+action=${1:-};[ $# -gt 0 ] && shift
+with_core=0
+if [ "$action" = trial-core ];then action=trial;with_core=1;fi
+base=/root/zigma-free;runtime=/tmp/zigma-mode;marker=/root/zigma-free/local-mode.lock
+seconds=90;map_once=0;core_data_dir=;supervise=0
+# Reconstruct the RAM raster once after boot; never poll native maps periodically.
+[ "$action" != boot ] || map_once=1
+while [ $# -gt 0 ];do
+ [ $# -ge 2 ] || exit 2
+ case "$1" in
+ --base) base=$2;;--runtime) runtime=$2;;--marker) marker=$2;;--seconds) seconds=$2;;
+ --map-once) map_once=$2;;--core-data-dir) core_data_dir=$2;;--supervise) supervise=$2;;*) exit 2;;esac
+ shift 2
+done
+for path in "$base" "$runtime" "$marker" ${core_data_dir:+"$core_data_dir"};do
+ case "$path" in /*) :;;*) exit 2;;esac
+ case "$path" in *[!a-zA-Z0-9_./-]*) exit 2;;esac
+done
+case "$seconds" in ''|*[!0-9]*) exit 2;;esac
+[ "$seconds" -ge 2 ] && [ "$seconds" -le 600 ] || exit 2
+case "$map_once:$supervise" in 0:0|0:1|1:0|1:1) :;;*) exit 2;;esac
+[ ! -L "$runtime" ] || exit 1
+mkdir -p "$runtime";chmod 700 "$runtime"
+backend=$base/zigma-mode-backend
+selected() { [ -f "$marker" ] && [ ! -L "$marker" ]; }
+absent() { [ ! -e "$marker" ] && [ ! -L "$marker" ]; }
+start() { awk '{print $22}' "/proc/$1/stat" 2>/dev/null; }
+state() { printf '%s\n' "$1" >"$runtime/state.new.$$";mv "$runtime/state.new.$$" "$runtime/state"; }
+identity_save() {
+ file=$1;p=$2;tick=$(start "$p") || return 1
+ [ -n "$tick" ] || return 1
+ printf '%s %s\n' "$p" "$tick" >"$file.new";mv "$file.new" "$file"
+}
+tracked_alive() {
+ [ -s "$1" ] || return 1
+ read -r p tick <"$1"
+ case "$p:$tick" in *[!0-9:]*|:*|*:) return 1;;esac
+ [ "$(start "$p")" = "$tick" ] || return 1
+ [ "$(awk '{print $3}' /proc/"$p"/stat 2>/dev/null)" != Z ] && kill -0 "$p" 2>/dev/null
+}
+identity_alive() {
+ tracked_alive "$1" || return 1
+ [ "$(readlink /proc/"$p"/exe 2>/dev/null)" = "$2" ]
+}
+start_core() {
+ set -- --run --marker "$marker" --handshake
+ [ "$map_once" = 0 ] || set -- "$@" --request-map-once
+ [ -z "$core_data_dir" ] || set -- "$@" --data-dir "$core_data_dir"
+ "$base/zigma-core-arm" "$@" >"$runtime/core.log" 2>&1 </dev/null 9>&- &
+ core_pid=$!;identity_save "$runtime/core.identity" "$core_pid" || true
+}
+start_network() {
+ "$base/zigma-network-arm" --run >"$runtime/network.log" 2>&1 </dev/null 9>&- &
+ network_pid=$!;identity_save "$runtime/network.identity" "$network_pid" || true
+}
+child_ok() {
+ kind=$1;exe=$base/zigma-$kind-arm
+ if [ "$supervise" = 0 ];then tracked_alive "$runtime/$kind.identity";return;fi
+ identity_alive "$runtime/$kind.identity" "$exe" || return 1
+ # Allow a newly spawned process to publish its first heartbeat; never trust an
+ # old file as proof for a replacement PID/start identity.
+ now_ticks=$(awk '{printf "%.0f",$1*100}' /proc/uptime)
+ if [ "$((now_ticks-tick))" -lt 1200 ];then return 0;fi
+ if [ "$kind" = core ];then health=/tmp/zigma-core/health.json;else health=/tmp/zigma-network/status.json;fi
+ "$base/zigma-core-arm" --check-health "$health" --check-exe "$exe"
+}
+case "$action" in
+ boot)
+  exec "$0" serve --base "$base" --runtime "$runtime" --marker "$marker" --supervise "$supervise" --map-once "$map_once" ${core_data_dir:+--core-data-dir "$core_data_dir"} >>"$runtime/supervisor.log" 2>&1 </dev/null
+ ;;
+ serve)
+  exec 7>"$runtime/supervisor.flock"
+  flock -n 7 || exit 1
+  identity_save "$runtime/supervisor.identity" "$$"
+  child=;child_tick=
+  serve_exit() {
+   trap - EXIT HUP INT TERM
+   if [ -n "$child" ] && [ "$(start "$child")" = "$child_tick" ];then kill -TERM "$child" 2>/dev/null || true;wait "$child" || true;fi
+   rm -f "$runtime/supervisor.identity"
+  }
+  trap serve_exit EXIT;trap 'exit 0' HUP INT TERM
+  while :;do
+   set -- run --base "$base" --runtime "$runtime" --marker "$marker" --supervise "$supervise" --map-once "$map_once"
+   [ -z "$core_data_dir" ] || set -- "$@" --core-data-dir "$core_data_dir"
+   "$0" "$@" >"$runtime/coordinator.log" 2>&1 </dev/null 7>&- &
+   child=$!;child_tick=$(start "$child" || true)
+   wait "$child" || true
+   child=;sleep 2 7>&-
+  done
+ ;;
+ watchdog)
+  sleep "$seconds"
+  [ ! -f "$runtime/trial.done" ] || exit 0
+  if selected && cmp -s "$marker" "$runtime/trial.token";then rm -f "$marker";fi
+  absent || exit 1
+  # A bounded recovery retry also covers a concurrently exiting coordinator.
+  attempt=0
+  until "$backend" recover "$base" "$runtime" "$marker";do
+   attempt=$((attempt+1));[ "$attempt" -lt 4 ] || exit 1;sleep 2
+  done
+  : >"$runtime/trial.done";state vendor;exit 0
+ ;;
+ run|trial) :;;*) echo 'Usage: zigma-mode boot|serve|run|trial|trial-core|watchdog [options]' >&2;exit 2;;
+esac
+exec 9>"$runtime/coordinator.flock"
+lock_attempt=0
+while ! flock -n 9;do
+ lock_attempt=$((lock_attempt+1));[ "$lock_attempt" -lt 5 ] || exit 1;sleep 1 9>&-
+done
+identity_save "$runtime/coordinator.identity" "$$"
+network_pid=;core_pid=;changed=0;finished=0;owns_trial=0
+cleanup() {
+ trap - EXIT HUP INT TERM
+ if [ "$owns_trial" = 1 ] && [ "$finished" = 0 ];then
+  if selected && cmp -s "$marker" "$runtime/trial.token";then rm -f "$marker";fi
+ fi
+ if absent && [ "$changed" = 1 ];then
+  if "$backend" recover "$base" "$runtime" "$marker" 9>&-;then
+   state vendor;[ "$action" != trial ] || : >"$runtime/trial.done"
+  fi
+ fi
+ rm -f "$runtime/coordinator.identity"
+}
+trap cleanup EXIT;trap 'exit 0' HUP INT TERM
+if [ "$action" = trial ];then
+ absent || exit 1
+ rm -f "$runtime/trial.done"
+ printf 'trial:%s:%s\n' "$$" "$(date +%s)" >"$runtime/trial.token"
+ (set -C;cat "$runtime/trial.token" >"$marker") || exit 1
+ owns_trial=1
+ nohup "$0" watchdog --base "$base" --runtime "$runtime" --marker "$marker" --seconds "$seconds" >"$runtime/watchdog.log" 2>&1 </dev/null 9>&- &
+fi
+local_active=0
+if [ "$action" = run ] && selected;then
+ if identity_alive "$runtime/network.identity" "$base/zigma-network-arm";then read -r network_pid tick <"$runtime/network.identity";local_active=1;changed=1;fi
+ if identity_alive "$runtime/core.identity" "$base/zigma-core-arm";then read -r core_pid tick <"$runtime/core.identity";local_active=1;changed=1;fi
+fi
+retries=0;last_native=0;last_vendor=0;native_ready=1
+while :;do
+ if selected;then
+  if [ "$local_active" = 0 ];then
+   if [ ! -x "$base/zigma-network-arm" ] || { { [ "$action" != trial ] || [ "$with_core" = 1 ]; } && [ ! -x "$base/zigma-core-arm" ]; };then state local_unavailable
+   else
+    changed=1
+    if "$backend" prepare-local "$base" "$runtime" "$marker" 9>&-;then
+     start_network
+     if [ "$action" != trial ] || [ "$with_core" = 1 ];then start_core;fi
+     local_active=1;state local
+    else state takeover_failed;[ "$action" != trial ] || exit 1;fi
+   fi
+  else
+   if [ "$supervise" = 1 ];then
+    now=$(awk '{printf "%.0f",$1}' /proc/uptime)
+    if [ "$((now-last_native))" -ge 5 ];then
+     last_native=$now;native_ready=1
+     "$backend" enforce-local "$base" "$runtime" "$marker" 9>&- || native_ready=0
+     if ! "$backend" native-health "$base" "$runtime" "$marker" 9>&-;then
+      native_ready=0;state native_unavailable
+      "$backend" stop-core "$base" "$runtime" "$marker" 9>&- || true
+      "$backend" native-recover "$base" "$runtime" "$marker" 9>&- || true
+     fi
+     if [ "$native_ready" = 1 ];then "$backend" web-repair "$base" "$runtime" "$marker" 9>&- || state web_unavailable;fi
+    fi
+   fi
+   if ! child_ok network || { { [ "$action" = run ] || [ "$with_core" = 1 ]; } && ! child_ok core; };then
+    state local_failed
+    if [ "$action" = run ];then
+     retries=$((retries+1));delay=$retries;[ "$delay" -le 30 ] || delay=30
+     sleep "$delay" 9>&-;selected || continue
+     if ! child_ok network;then
+      if "$backend" stop-network "$base" "$runtime" "$marker" 9>&-;then start_network;fi
+     fi
+     if [ "$native_ready" = 1 ] && ! child_ok core;then
+      if "$backend" stop-core "$base" "$runtime" "$marker" 9>&-;then start_core;fi
+     fi
+     if [ "$native_ready" = 1 ];then state local;else state native_unavailable;fi
+    fi
+   fi
+  fi
+ elif ! absent;then state invalid_selector
+ else
+  vendor_failed=0
+  if [ "$supervise" = 1 ];then
+   now=$(awk '{printf "%.0f",$1}' /proc/uptime)
+   if [ "$((now-last_vendor))" -ge 5 ];then
+    last_vendor=$now
+    "$backend" vendor-health "$base" "$runtime" "$marker" 9>&- || vendor_failed=1
+   fi
+  fi
+  if [ "$vendor_failed" = 1 ] || [ "$local_active" = 1 ] || [ "$(cat "$runtime/state" 2>/dev/null || true)" != vendor ];then
+   if "$backend" recover "$base" "$runtime" "$marker" 9>&-;then
+    state vendor;changed=0;local_active=0
+    if [ "$action" = trial ];then : >"$runtime/trial.done";finished=1;exit 0;fi
+   else state recovery_failed;fi
+  fi
+ fi
+ sleep 1 9>&-
+done

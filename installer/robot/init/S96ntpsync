@@ -1,0 +1,10 @@
+#!/bin/sh
+# BusyBox cron lacks a verified @reboot facility; use persistent init instead.
+case "$1" in
+    start)
+        /root/bin/zigma-time-sync boot </dev/null >/dev/null 2>&1 &
+        ;;
+    stop) : ;;
+    restart|reload) "$0" start ;;
+    *) echo "Usage: $0 start|stop|restart|reload" >&2; exit 1 ;;
+esac

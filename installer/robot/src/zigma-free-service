@@ -1,0 +1,121 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.3 (packaged 2026-11-07T17:42:26+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Persistent own runtime; telemetry, demand markers and process logs remain in RAM.
+set -eu
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+export PATH
+base=/root/zigma-free
+ram=/tmp/zigma-free
+# Optional per-device settings; defaults retain existing Caccamora installs.
+robot_name=Caccamora
+if test -f "$base/device.conf"; then . "$base/device.conf"; fi
+case "$robot_name" in ''|*[!a-zA-Z0-9_-]*) echo 'Invalid robot_name' >&2; exit 2;; esac
+ticks() { awk '{print $22}' "/proc/$1/stat" 2>/dev/null; }
+alive() {
+ test -s "$ram/$1.pid" || return 1
+ pid=$(cat "$ram/$1.pid")
+ case "$pid" in ''|*[!0-9]*) return 1;;esac
+ case "$1" in agent) expected="$base/free-zigma-agent-arm";;observe) expected="$base/zigma-observe-arm";;*) return 1;;esac
+ actual=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
+ case "$actual" in "$expected") :;;"$expected (deleted)") test "${2:-}" = allow-deleted || return 1;;*)return 1;;esac
+ if test -f "$ram/$1.birth";then test "$(ticks "$pid")" = "$(cat "$ram/$1.birth")" || return 1;fi
+ kill -0 "$pid" 2>/dev/null
+}
+identity() { printf '%s\n' "$2" >"$ram/$1.pid";ticks "$2" >"$ram/$1.birth"; }
+native_ids() {
+ app_pid=$(pidof wifi_app_server_grit || true);nav_pid=$(pidof demo_rplidar || true)
+ test -n "$app_pid" && test -n "$nav_pid" || return 1
+ test "/proc/$app_pid/exe" -ef /root/app_server/wifi_app_server_grit || return 1
+ test "/proc/$nav_pid/exe" -ef /root/hoslam/demo_rplidar || return 1
+ native_key="$app_pid:$(ticks "$app_pid"):$nav_pid:$(ticks "$nav_pid")"
+}
+stop_one() {
+ process=$1
+ if alive "$process" allow-deleted;then
+  own_pid=$pid;own_tick=$(ticks "$pid");kill -TERM "$pid";i=0
+  while alive "$process" allow-deleted;do
+   test "$pid" = "$own_pid" && test "$(ticks "$pid")" = "$own_tick" || return 1
+   i=$((i+1));if test "$i" -ge 8;then kill -KILL "$pid";sleep 1;alive "$process" allow-deleted && return 1;break;fi
+   sleep 1
+  done
+ fi
+}
+stop_own() { stop_one agent;stop_one observe; }
+# A failed/slow launch or code rollback must not strand an unregistered publisher.
+cleanup_orphans() (
+ process=$1
+ case "$process" in agent) binary=free-zigma-agent-arm;;observe)binary=zigma-observe-arm;;*)exit 2;;esac
+ expected="$base/$binary";keep=
+ if alive "$process";then keep=$pid;fi
+ for orphan in $(pidof "$binary" || true);do
+  test "$orphan" != "$keep" || continue
+  tick=$(ticks "$orphan" || true);test -n "$tick" || continue
+  actual=$(readlink "/proc/$orphan/exe" 2>/dev/null || true)
+  case "$actual" in "$expected"|"$expected (deleted)") :;;*)continue;;esac
+  kill -TERM "$orphan" 2>/dev/null || continue;i=0
+  while test "$(ticks "$orphan" || true)" = "$tick";do
+   actual=$(readlink "/proc/$orphan/exe" 2>/dev/null || true)
+   case "$actual" in "$expected"|"$expected (deleted)") :;;*)break;;esac
+   i=$((i+1));if test "$i" -ge 8;then kill -KILL "$orphan" 2>/dev/null || true;break;fi
+   sleep 1
+  done
+ done
+)
+
+case "${1:-}" in
+ status)
+  native_ids && alive agent && alive observe && test "$native_key" = "$(cat "$ram/native.identity" 2>/dev/null || true)"
+  ;;
+ stop)
+  mkdir -p "$ram";exec 6>"$ram/service.flock";flock 6
+  stop_own
+ ;;
+ boot)
+  # Init must not wait for Wi-Fi, application or navigation startup.
+  mkdir -p "$ram";chmod 700 "$ram"
+  nohup "$base/zigma-free-service" start >"$ram/start.log" 2>&1 </dev/null 6>&- &
+  ;;
+ start|repair|repair-web|repair-observer)
+  mkdir -p "$ram/observation";chmod 700 "$ram" "$ram/observation"
+  exec 6>"$ram/service.flock";flock 6
+  case "$1" in repair-web) stop_one agent;;repair-observer) stop_one observe;;esac
+  cleanup_orphans agent
+  cleanup_orphans observe
+  if native_ids && alive agent && alive observe && test "$native_key" = "$(cat "$ram/native.identity" 2>/dev/null || true)";then exit 0;fi
+  i=0
+  while :; do
+   app_pid=$(pidof wifi_app_server_grit || true)
+   nav_pid=$(pidof demo_rplidar || true)
+   if test -n "$app_pid" && test -n "$nav_pid"; then break;fi
+   i=$((i+1));test "$i" -lt 30;sleep 2
+  done
+  test "/proc/$app_pid/exe" -ef /root/app_server/wifi_app_server_grit
+  test "/proc/$nav_pid/exe" -ef /root/hoslam/demo_rplidar
+  test "$(sha256sum /root/app_server/wifi_app_server_grit | cut -d ' ' -f 1)" = 4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a
+  test "$(sha256sum /root/hoslam/demo_rplidar | cut -d ' ' -f 1)" = b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255
+  native_ids
+  # Native app identity changes invalidate adapters in both children. An isolated
+  # observer failure otherwise leaves the agent and its Telegram receiver alone.
+  if test -f "$ram/native.identity" && test "$native_key" != "$(cat "$ram/native.identity")";then stop_own;fi
+  printf '%s\n' "$native_key" >"$ram/native.identity"
+  if ! alive observe;then
+  nohup nice -n 10 "$base/zigma-observe-arm" "$ram/observation" /tmp/app_server.log --app-server-pid "$app_pid" --nav-pid "$nav_pid" --core-dir /tmp/zigma-core --core-exe "$base/zigma-core-arm" >"$ram/observer.log" 2>&1 </dev/null 6>&- &
+  identity observe "$!"
+  fi
+  if ! alive agent;then
+  "$base/zigma-cron" ensure 6>&-
+  nohup nice -n 10 "$base/free-zigma-agent-arm" --listen 0.0.0.0 --name "$robot_name" --mode commands --telegram-curl "$base/zigma-curl-arm" --telegram-ca "$base/telegram-ca.pem" --control-bin /root/bin/zigmactl --zones-bin "$base/zigma-zones-arm" --area-bin "$base/zigma-area-arm" --settings-bin "$base/zigma-settings" --options-bin "$base/zigma-options-arm" --voices-dir /root/voice --ssh-keys-file /root/.ssh/authorized_keys --maps-bin "$base/zigma-maps-arm" --maps-dir /root/hoslam --map-library-dir /root/zigma-free-master-maps --maps-app-pid "$app_pid" --status-file "$ram/observation/status.json" --map-file "$ram/observation/map.json" --data-dir "$base/data" --core-records-dir "$base/data/core-records" --web-dir "$base/src" --port 8765 --cron-dir /root/etc/crontabs --crontab-bin /usr/bin/crontab --cron-helper "$base/zigma-cron" >"$ram/agent.log" 2>&1 </dev/null 6>&- &
+  identity agent "$!"
+  fi
+  # nice/exec may take longer than one second on a busy robot.
+  i=0
+  until alive agent && alive observe;do
+   i=$((i+1));test "$i" -lt 15;sleep 1
+  done
+  ;;
+ *) echo 'Usage: zigma-free-service start|repair|stop|boot|status' >&2;exit 2;;
+esac

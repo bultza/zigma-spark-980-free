@@ -1,0 +1,13 @@
+#!/bin/sh
+# zigma-modular-hostname-v1
+set -eu
+case "${1:-}" in
+ start|restart|reload)
+  value=$(cat /root/hostname)
+  case "$value" in ''|-*|*-|*[!a-z0-9-]*) exit 2;; esac
+  test ${#value} -le 63
+  hostname "$value"
+ ;;
+ stop) :;;
+ *) exit 2;;
+esac

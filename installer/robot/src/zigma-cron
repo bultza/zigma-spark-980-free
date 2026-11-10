@@ -1,0 +1,38 @@
+#!/bin/sh
+# BEGIN ZIGMA VERSION
+if [ "$#" -eq 1 ];then
+ case "$1" in -v|--version) printf '%s\n' 'zigma-cron V1.1 (packaged 2026-10-28T08:30:44+00:00)';exit 0;;esac
+fi
+# END ZIGMA VERSION
+# Caccamora's existing persistent BusyBox cron service; never replace root jobs.
+set -eu
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+export PATH
+unset TZ
+folder=/root/etc/crontabs
+case "${1:-}" in status|ensure) ;; *) exit 2;; esac
+available=false
+if test -x /usr/bin/crontab && test -x /usr/sbin/crond; then available=true; fi
+if test "$1" = ensure; then
+ test "$available" = true
+ mkdir -p "$folder"
+ chmod 700 "$folder"
+ # Absence of jobs is not absence of cron. Only create a missing root table.
+ if ! test -e "$folder/root"; then (set -C; umask 077; : > "$folder/root"); fi
+ test -f "$folder/root" && ! test -L "$folder/root"
+ chmod 600 "$folder/root"
+ # /var/spool is RAM on this firmware. Recreate the default crontab alias at boot.
+ mkdir -p /var/spool/cron
+ chmod 700 /var/spool/cron
+ if ! test -e /var/spool/cron/crontabs && ! test -L /var/spool/cron/crontabs; then
+  ln -s "$folder" /var/spool/cron/crontabs
+ fi
+ test "$(readlink -f /var/spool/cron/crontabs)" = "$folder"
+ if ! pidof crond >/dev/null 2>&1; then /usr/sbin/crond -b -c "$folder" -L /tmp/crond.log; fi
+fi
+running=false
+for pid in $(pidof crond 2>/dev/null || true); do
+ if tr '\000' '\n' < "/proc/$pid/cmdline" | awk -v wanted="$folder" 'prev=="-c" && $0==wanted {found=1} {prev=$0} END {exit !found}'; then running=true; fi
+done
+printf '{"available":%s,"running":%s,"persistent_service":%s,"timezone":"system"}\n' "$available" "$running" "$(if test -x /root/etc/init.d/S97crond; then echo true; else echo false; fi)"
+if test "$1" = ensure; then test "$running" = true; fi

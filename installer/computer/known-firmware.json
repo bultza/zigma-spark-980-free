@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "policy": "Other firmware hashes gate tools/full only. Persistent SSH uses executable Dropbear/capability checks, reviewed boot dispatch and persistent storage. Unknown means unreviewed, not necessarily incompatible.",
+  "variants": {
+    "direct": {
+      "name": "ciccio-original-kernel20",
+      "reference_image_sha256": "9645208f9d486363871c303914897c1114f2ca2ad4b040bf586577d767c6b23d",
+      "files": {
+        "/dev/mtd1": "c8189701d5e4959d7f2c2e812e655d998cf06dd6988112e7483fdd8636ec82c4",
+        "/dev/mtd2": "b23dbe53462d4fa306d1e261c1a6909ce4787873d169bf01a7fe9064cde8da12",
+        "/dev/mtd3": "48345cb4721ed905ad2e9613730e9b38088d14156ea83a15eb99b09816194243",
+        "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+        "/bin/busybox": "101dbf222f6ba88368242e9ce8f83ea90aa3b114772ac3ab70bb0a71c73cbccf",
+        "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+        "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+        "/root/yg/ygclient": "b95376d5800281c887d961d92d86151ae90776ee3bf9fd9efd00e8e32e305b98",
+        "/root/app_server/daemon": "6af2edd1f967e049cf2ea096dd4b19118d67072ff110ab43e2d323c2aa396107",
+        "/root/app_server/wifi_app_server_grit": "4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a",
+        "/root/hoslam/demo_rplidar": "b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255",
+        "/root/bin/wpa_supplicant": "f1c4e8601aca30983458b432bdaee106c17eb51b6af68b1ec4a613f59ccb7752",
+        "/root/modules/8189fs.ko": "04eb388d14a53145c7b00790519f084d472b1fee87811c8313b6bc418b9fe208",
+        "/root/lib/libnl.so.1": "9ab8d584e5f3205f24dcaaed049a562183801741f22206650df5d43f3611cb53",
+        "/root/bin/hold380": "8a5a2538c5b21b6916867b2ea4173d45b2a1d9fafbcc16e1f66eb37f7f536e58",
+        "/root/etc/init.d/S70yg": "1c7b3f64b4866358f4b2676b8ec05cd4d0c5e2d7e99544d343edfa1abc362e66",
+        "/root/etc/init.d/S99daemon": "8996c8426d0c86b6ac0868a5bc037419bf612914961619fcc83b57788cd38841"
+      }
+    },
+    "overlay": {
+      "name": "ciccia-original-kernel23",
+      "reference_image_sha256": "fd39677de9bf0869f77111df2a01d5702b60e39ddfb70f0be7ac6718fad7e490",
+      "files": {
+        "/dev/mtd1": "0ed7dd1f94706b4202101727c57a4f5a9c966559078c89f7f37ced7115ad3b3b",
+        "/dev/mtd2": "0e912343ba5e0ce27e302c3b98b0755540be6c503838d6bf8cca0633d2300d3c",
+        "/dev/mtd3": "84f570dfc1bcdf115e7e009025861a5c2b0a72be6d6315b28a1828e50fcc065f",
+        "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+        "/bin/busybox": "101dbf222f6ba88368242e9ce8f83ea90aa3b114772ac3ab70bb0a71c73cbccf",
+        "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+        "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+        "/root/yg/ygclient": "ce73b4c04b012c7ea57d0e46b8bacd20ab4110596093205fa62cce86b5c77d39",
+        "/root/app_server/daemon": "6af2edd1f967e049cf2ea096dd4b19118d67072ff110ab43e2d323c2aa396107",
+        "/root/app_server/wifi_app_server_grit": "4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a",
+        "/root/hoslam/demo_rplidar": "b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255",
+        "/root/bin/wpa_supplicant": "45b23ee81401f80def60690441d2afb0c18e8d2c27240452b938e1c1ee45f22c",
+        "/root/modules/8189fs.ko": "04eb388d14a53145c7b00790519f084d472b1fee87811c8313b6bc418b9fe208",
+        "/root/lib/libnl.so.1": "9ab8d584e5f3205f24dcaaed049a562183801741f22206650df5d43f3611cb53",
+        "/root/bin/hold380": "8a5a2538c5b21b6916867b2ea4173d45b2a1d9fafbcc16e1f66eb37f7f536e58",
+        "/root/etc/init.d/S70yg": "4763d5eb69652f338f6abf29e92da90753893819b339ea3bf48414a864ea800d",
+        "/root/etc/init.d/S99daemon": "8996c8426d0c86b6ac0868a5bc037419bf612914961619fcc83b57788cd38841"
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Restore UTC RTC or last successful NTP time after RTC power loss.
+case "$1" in
+    start)
+        /bin/busybox hwclock -u -s || :
+        saved=$(cat /root/etc/ntp-last-epoch 2>/dev/null || :)
+        case "$saved" in
+            ''|*[!0-9]*) exit 0 ;;
+        esac
+        # Reject corrupt/unreasonable values, then use saved time as a floor.
+        [ "$saved" -ge 1704067200 ] 2>/dev/null || exit 0
+        [ "$saved" -le 2145916800 ] 2>/dev/null || exit 0
+        now=$(date +%s)
+        if [ "$now" -lt "$saved" ]; then
+            date -u -s "@$saved"
+        fi
+        ;;
+    stop) : ;;
+    restart|reload) "$0" start ;;
+    *) echo "Usage: $0 start|stop|restart|reload" >&2; exit 1 ;;
+esac

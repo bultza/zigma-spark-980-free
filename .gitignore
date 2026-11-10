@@ -1,0 +1,44 @@
+# Python and the installer environment
+__pycache__/
+*.py[cod]
+.wizard-venv/
+.venv/
+
+# Compiled output and deployment archives
+build/
+dist/
+*.o
+*.a
+zigma-deployment-*.zip
+zigma-deployment-*.tar.gz
+zigma-deployment-*.sha256
+
+# Local installer sessions, backups, and diagnostics
+/Zigma/
+/runtime/
+nor-backup.*
+nor-*.unverified.*
+trial-failure-*.json
+backup-risk-accepted.json
+*.log
+*.pcap
+*.pcapng
+*.bin
+
+# Private configuration and credentials
+.env
+.env.*
+!.env.example
+access.token
+zigma_key
+zigma_key.pub
+known_hosts
+server-key.pem
+server-cert.pem
+hosts.original.txt
+wpa_supplicant.conf
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*~
