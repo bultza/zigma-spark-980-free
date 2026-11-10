@@ -49,6 +49,10 @@ The robot has two main PCBs. The **AM580 main logic board** runs Linux, and the 
 *AM580 main logic board in the top row and AM380 chassis controller board in the bottom row. Top views are on the left and bottom views on the right.*
 
 ## How to install
+
+> [!WARNING]
+> Installing Zigma Free can leave your robot unable to boot or operate. The risk appears low on supported Spark-980 firmware when you follow the guide, but a mistake or a power interruption at the wrong time can still brick the robot. Check your firmware, keep the robot powered during installation, and stop if the wizard cannot verify the flash backup. Proceed only if you are prepared to recover the robot.
+
 On a Windows or Linux computer with Python 3.10 or later, download and extract the [latest release package](https://github.com/bultza/zigma-spark-980-free/releases). Then follow the detailed instructions from here: [Install Zigma Free](installer/README.md)
 
 > [!WARNING]
