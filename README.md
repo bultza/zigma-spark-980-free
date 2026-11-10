@@ -63,9 +63,14 @@ On a Windows or Linux computer with Python 3.10 or later, download and extract t
 See [Instructions and troubleshooting](USAGE.md) for how to use your brand new robot, how to add SSH public keys after installation and recover access if you move house or lose your old computer.
 
 ## How we discovered access
-First we tried UART access control but the TTY is hitjacked by the onboard software during boot, then we tried to dump the SPI memory directly from the main PCB board and dumped back a script to enable SSH, from there we found other a way to interrupt the UART hijack and after that we managed to discover a "Software only" way to access any new robots, then we saw how Zigma was sending us the "auto-destruct" command. For more details you can follow here: - [How we hacked it](hack/HISTORY.md) follows the investigation from Wi-Fi pairing to local control.
 
-![Zigma Free settings showing robot, audio, and access options](images/zigma-free-settings-desktop-cropped.png)
+We started with the UART console. It let us watch the robot boot, but the factory debug server took over the serial port before we could get a shell. So we wired a Raspberry Pi Pico to the SPI flash, read the memory, and modified the writable partition to start the robot's built-in SSH server.
+
+Later, we worked out how to unlock the UART console and found an easier way to get SSH without opening the robot. The factory Wi-Fi pairing process could download and run a script from a computer on the local network. Once we had shell access, we captured the cloud command that deleted the robot's Wi-Fi settings. We called it the “auto-destruct” command.
+
+[How we hacked it](hack/HISTORY.md) tells the full story, from the wires on the bench to local control.
+
+![Raspberry Pi Pico wired to the Spark-980 main logic board to read its SPI flash](images/zigma_NOR_Memory_dump_messy.jpg)
 
 ## Plan for the future
 
