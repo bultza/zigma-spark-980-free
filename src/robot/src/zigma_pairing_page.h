@@ -1,0 +1,32 @@
+/* Embedded portal assets, kept in the network binary. */
+static const char pairing_page[]=
+"<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Robot Wi-Fi setup</title><style>body{font:17px system-ui;max-width:32rem;margin:1rem auto;padding:1rem;background:#f5f7fa;color:#172435}label,input,select,button,textarea{display:block;margin:.7rem 0}input,select,button,textarea{box-sizing:border-box;width:100%%;padding:.7rem;font:inherit}input[type=checkbox]{display:inline;width:auto}button{background:#174e79;color:white;border:0;border-radius:.4rem}small{display:block}code{overflow-wrap:anywhere}section{border-top:1px solid #ccd4df;margin-top:2rem}#notice{color:#873400}textarea{min-height:6rem}</style><h1>Robot Wi-Fi setup</h1><p id=notice role=status>%s</p><p>Choose your 2.4 GHz WPA/WPA2 network. This setup network has no Internet access.</p><form method=post action=/connect id=wifi><input type=hidden name=token value='%s'><label>Available networks<select id=networks><option value=\"\">Enter manually</option>%s</select></label><button type=button id=rescan>Rescan networks</button><small id=scan-status role=status>Checking available networks\u2026</small><small>Scans can take up to 10 seconds. Only 2.4 GHz networks are shown. You can also enter a network name below.</small><label>Network name (SSID)<input id=ssid name=ssid maxlength=32 required autocomplete=off></label><label>Wi-Fi password<input id=password name=password type=password minlength=8 maxlength=63 required autocomplete=new-password></label><label><input type=checkbox id=show-password> Show password</label><button>Connect</button></form><form method=post action=/cancel><input type=hidden name=token value='%s'><button>Cancel and restore previous Wi-Fi</button></form><p>Setup closes after five minutes. If connection fails, reconnect to %s and reopen <a href=\"/\">this page</a> for a fresh session.</p><section><h2>Manual access (SSH)</h2><p>%s</p><p><code>ssh -p 22 root@%s</code></p><p>SSH uses public keys. Add your .pub file to allow its matching private key to log in. Existing keys are kept; this access remains after setup closes. Never upload a private key.</p><form method=post action=/ssh id=ssh><input type=hidden name=token value='%s'><label>Public key file<input id=key-file type=file accept=\".pub,text/plain\"></label><label>Or paste one OpenSSH public key<textarea id=public-key name=public_key maxlength=8192 required autocomplete=off></textarea></label><small>Ed25519, RSA (2048+ bit), or ECDSA P-256.</small><button>Add public key</button></form></section><script nonce='%s'>\n"
+"const select=document.getElementById('networks'),ssid=document.getElementById('ssid');\n"
+"select.addEventListener('change',()=>{ssid.value=select.value;ssid.focus();});\n"
+"ssid.addEventListener('input',()=>{if(ssid.value!==select.value)select.value='';});\n"
+"document.getElementById('show-password').addEventListener('change',e=>{document.getElementById('password').type=e.target.checked?'text':'password';});\n"
+"document.getElementById('key-file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;if(f.size>8192){alert('Choose one public key file smaller than 8 KB.');e.target.value='';return;}try{document.getElementById('public-key').value=await f.text();}catch(_){alert('Could not read this file. Paste the public key instead.');}});\n"
+"document.getElementById('wifi').addEventListener('submit',e=>{if(new TextEncoder().encode(ssid.value).length>32){e.preventDefault();alert('The network name must be at most 32 bytes.');}});\n"
+"\n"
+"%s</script></html>\n";
+static const char pairing_scan_js[]=
+"const rescan=document.getElementById('rescan'),scanStatus=document.getElementById('scan-status');\n"
+"let scanTimer,scanUntil=Date.now()+15000;\n"
+"async function scanRequest(path,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);try{const response=await fetch(path,{...options,signal:controller.signal,cache:'no-store'});if(!response.ok)throw Error('request');return await response.text();}finally{clearTimeout(timer);}}\n"
+"async function refreshNetworks(){\n"
+" clearTimeout(scanTimer);\n"
+" try{\n"
+"  const html=await scanRequest('/networks'),doc=new DOMParser().parseFromString(html,'text/html'),result=doc.getElementById('scan-result');if(!result)throw Error('session');\n"
+"  const selected=select.value;select.replaceChildren(new Option('Enter manually',''),...Array.from(result.querySelectorAll('option'),o=>new Option(o.textContent,o.textContent)));select.value=selected;if(select.selectedIndex<0)select.value='';\n"
+"  const busy=result.dataset.busy==='1';rescan.disabled=busy;\n"
+"  scanStatus.textContent=busy?'Scanning\u2026 this may take up to 10 seconds.':result.dataset.failed==='1'?'Scan failed or timed out. Previous results were kept; retry or enter the network manually.':result.dataset.count==='0'?'No visible networks found. Retry or enter the network manually.':result.dataset.count+' networks found.';\n"
+"  if(busy&&Date.now()<scanUntil)scanTimer=setTimeout(refreshNetworks,700);\n"
+"  else if(busy){rescan.disabled=false;scanStatus.textContent='Scan is taking longer than expected. Retry or enter the network manually.';}\n"
+" }catch(_){rescan.disabled=false;scanStatus.textContent='Could not refresh the list. Check the setup connection or reload the page.';if(Date.now()<scanUntil)scanTimer=setTimeout(refreshNetworks,1000);}\n"
+"}\n"
+"rescan.addEventListener('click',async()=>{\n"
+" clearTimeout(scanTimer);rescan.disabled=true;scanStatus.textContent='Scanning\u2026 this may take up to 10 seconds.';scanUntil=Date.now()+15000;\n"
+" try{await scanRequest('/scan',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:document.querySelector('#wifi input[name=token]').value})});}catch(_){scanStatus.textContent='Checking whether the scan started\u2026';}\n"
+" refreshNetworks();\n"
+"});\n"
+"refreshNetworks();\n";

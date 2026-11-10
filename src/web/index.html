@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#304f43">
+  <title>Zigma Free</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/nor.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Zigma Free, home"><span class="brand-mark" data-icon="robot"></span><span>Zigma<span class="brand-local">FREE</span></span></a>
+    <div class="sidebar-caption">No fate but what we make</div>
+    <nav aria-label="Main navigation">
+      <button class="nav-item active" data-page="control"><span data-icon="home"></span>My robot</button>
+      <button class="nav-item" data-page="maps"><span data-icon="area"></span>Saved maps</button>
+      <button class="nav-item" data-page="schedules"><span data-icon="calendar"></span>Schedules<span class="nav-count" id="schedule-count">0</span></button>
+      <button class="nav-item" data-page="activity"><span data-icon="activity"></span>Activity</button>
+      <button class="nav-item" data-page="settings"><span data-icon="settings"></span>Settings</button>
+      <button class="nav-item" data-page="about"><span data-icon="info"></span>About</button>
+    </nav>
+    <div class="sidebar-footer"><div class="connection"><span class="connection-dot"></span><span id="connection-label">Connecting…</span></div><button class="quiet-button access-button" id="access-button"><span data-icon="key"></span>Local access</button></div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="breadcrumb">My home <span>/</span> <span id="breadcrumb-name">Vacuum Robot</span></div><div class="topbar-right"><span class="mode-badge" id="mode-badge">Loading</span><span class="topbar-clock" id="clock"></span></div></header>
+    <section class="notice hidden" id="connection-error" role="status"></section>
+    <section class="page" id="page-control">
+      <div class="page-heading"><div><h1 id="robot-name">Vacuum Robot</h1></div><div class="robot-summary"><span class="status-dot"></span><span id="summary-state">Connecting</span></div></div>
+      <div class="stats-row">
+        <div class="stat"><span class="stat-icon" data-icon="battery"></span><div><span class="stat-label">Battery</span><div class="stat-value" id="battery">—<small>%</small></div></div><div class="battery-track"><div id="battery-fill"></div></div></div>
+        <div class="stat"><span class="stat-icon" data-icon="area"></span><div><span class="stat-label">Cleaning area</span><div class="stat-value" id="clean-area">—<small>m²</small></div></div></div>
+        <div class="stat"><span class="stat-icon" data-icon="clock"></span><div><span class="stat-label">Cleaning time</span><div class="stat-value" id="clean-time">—<small>min</small></div></div></div>
+        <div class="stat"><span class="stat-icon" data-icon="wifi"></span><div><span class="stat-label">Wi-Fi signal</span><div class="stat-value" id="wifi-signal">—<small>dBm</small></div></div></div>
+      </div>
+      <div class="control-layout">
+        <section class="map-panel" aria-label="Robot map">
+          <div class="panel-heading"><div><h2>Your map</h2><p id="map-description">Current map</p></div><div class="map-heading-tools"><output id="map-coordinates" class="tiny-badge" title="Cursor coordinates in map cells, relative to the map origin">X: —  Y: —</output><label>View <select id="map-view" aria-label="Map view"><option value="map">Map</option><option value="laser">Live LIDAR</option><option value="detailed">Detailed Map</option></select></label><button id="laser-rotate" class="quiet-button hidden" type="button" aria-pressed="true">Fixed frame</button><button id="laser-overlay" class="quiet-button hidden" type="button" aria-pressed="true">Map overlay: on</button><span class="tiny-badge" id="map-source">SIMULATED</span><button class="icon-button" id="reset-map" aria-label="Centre map" title="Centre map"><span data-icon="expand"></span></button></div></div>
+          <div class="map-toolbar" role="group" aria-label="Map tools"><button class="map-tool selected" data-tool="pan"><span data-icon="hand"></span>Explore</button><button class="map-tool" data-tool="area"><span data-icon="area"></span>Clean an area</button><button class="map-tool" data-tool="zone"><span data-icon="ban"></span>No-go zone</button></div>
+          <div class="map-stage"><canvas id="map" tabindex="0" aria-label="Map: drag to explore or select an area using the tools"></canvas><div class="map-empty hidden" id="map-empty">The map is not available yet.</div><div class="map-instruction" id="map-instruction">Drag to explore · Scroll to zoom</div><div class="zoom-control"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button></div></div>
+          <output id="robot-coordinates" class="robot-coordinates" title="Latest navigation cache · map cells relative to map origin · heading: 0° up, 90° right in Fixed frame">Robot · position unavailable</output>
+          <div class="map-legend"><span><i class="legend-base"></i>Base</span><span><i class="legend-robot"></i><span id="position-legend">Last path point</span></span><span><i class="legend-path"></i>Path</span><span><i class="legend-zone"></i>No-go zones</span><span id="map-freshness">Simulated data</span></div>
+          <div class="selection-panel hidden" id="selection-panel"><div><strong id="selection-title">Selected area</strong><span id="selection-size"></span></div><div class="selection-coordinates"><label>X<input type="number" id="rect-x" min="0" step="1" aria-label="Horizontal position"></label><label>Y<input type="number" id="rect-y" min="0" step="1" aria-label="Vertical position"></label><label>Width<input type="number" id="rect-width" min="2" step="1"></label><label>Height<input type="number" id="rect-height" min="2" step="1"></label></div><label id="zone-restriction-field" class="hidden">Restriction <select id="zone-restriction"><option value="all">No cleaning or mopping</option><option value="vacuum">No vacuuming</option><option value="mop">No mopping</option></select></label><div class="selection-actions"><button class="quiet-button" id="cancel-selection">Cancel</button><button class="primary-button small" id="apply-selection">Clean this area</button></div></div>
+          <div class="zone-list hidden" id="zone-list" aria-label="No-go zones"></div>
+        </section>
+        <aside class="right-column">
+          <section class="robot-card"><div class="robot-illustration" aria-hidden="true"><div class="robot-shadow"></div><div class="robot-body"><div class="robot-lidar"></div><span class="robot-wordmark">ZIGMA</span><div class="robot-button"></div><div class="robot-brush"></div></div><span class="charge-spark" data-icon="bolt"></span></div><div class="robot-state-label" id="robot-state-label"></div><p id="robot-state-detail"></p><label class="field">Fan power<select id="clean-fan-power"><option value="1">1 · Quiet</option><option value="2">2 · Normal</option><option value="3" selected>3 · Full</option></select></label><button class="primary-button" id="primary-command" disabled><span data-icon="play"></span><span id="primary-command-label">Start cleaning</span></button><div class="secondary-controls"><button id="pause-command" disabled><span data-icon="pause"></span>Pause</button><button id="dock-command" disabled><span data-icon="dock"></span>Return to dock</button></div><div class="command-result hidden" id="command-result" role="status"></div></section>
+          <section class="next-routine"><div class="section-label"><span data-icon="calendar"></span>NEXT ROUTINE</div><strong id="next-routine-time">At your own pace</strong><p id="next-routine-detail">No schedules yet.</p><button class="text-link" id="go-schedules">Manage schedules <span>↗</span></button></section>
+          <div class="local-note"><span data-icon="shield"></span><p id="local-note-text">Demo with simulated data. No robot is connected.</p></div>
+        </aside>
+      </div>
+      <div class="recent-section"><div class="section-heading"><h2>Recent activity</h2><button class="text-link" id="go-activity">View activity <span>→</span></button></div><div id="recent-events" class="recent-events"></div></div>
+    </section>
+    <section class="page hidden" id="page-maps">
+      <div class="page-heading"><div><h1>Saved maps</h1></div><button class="quiet-button" id="refresh-saved-maps">Refresh maps</button></div>
+      <p class="maps-note">Master copies stay unchanged while the robot cleans.</p>
+      <div id="saved-maps-action-status" role="status" class="maps-status"></div>
+      <h2>Robot maps</h2><p class="maps-note">Clear current map starts a new map. Master copies are kept.</p>
+      <div id="saved-maps-status" role="status" class="maps-status"></div>
+      <div id="saved-maps-list" class="saved-maps-list"></div>
+      <section class="master-library"><h2>Master copies</h2><p class="maps-note">Saving a copy does not activate it.</p>
+      <div id="master-maps-status" class="maps-status" role="status"></div><div id="master-maps-list" class="saved-maps-list"></div></section>
+      <details class="master-trash"><summary>Trash <span id="master-trash-count">0</span></summary><p class="maps-note">Recover a copy, or delete it permanently to free space.</p><div id="master-trash-list" class="saved-maps-list"></div></details>
+      
+    </section>
+    <section class="page hidden" id="page-schedules">
+      <div class="page-heading"><div><h1>Schedules</h1></div><button class="primary-button fit" id="add-schedule"><span data-icon="plus"></span>New schedule</button></div>
+      <div class="schedule-banner"><span data-icon="clock"></span><div><strong>Robot local time · Europe/Madrid</strong></div></div>
+      <div class="schedule-installation" id="schedule-installation" role="status"></div>
+      <div id="schedule-list" class="schedule-list"></div>
+      <section class="external-cron-section"><h2>Other crontab entries</h2><p id="external-cron-status"></p><div id="external-cron-list"></div></section><details class="cron-details"><summary id="cron-table-title">Robot crontab (raw)</summary><p>Full clean and reboot run zigmactl directly. Dock and restore use the agent. Entries outside the Zigma block are preserved.</p><pre id="cron-preview"></pre><button class="quiet-button" id="copy-cron">Copy</button></details>
+      <p class="schedule-footnote"><span data-icon="info"></span>Full clean sends zigmactl clean directly at the scheduled time. Reboot also runs directly, including during cleaning. Return to dock and restore require recent reports; their missed runs are not replayed.</p>
+    </section>
+    <section class="page hidden" id="page-activity"><div class="page-heading"><div><h1>Activity</h1></div><span class="tiny-badge" id="activity-source">LOCAL</span></div><div id="cleaning-reports" class="activity-list"></div><div id="activity-list" class="activity-list"></div></section>
+    <section class="page hidden" id="page-settings">
+      <div class="page-heading"><h1>Robot settings</h1><span class="tiny-badge" id="settings-mode">LOCAL</span></div>
+      <div class="settings-grid compact-settings">
+        <form id="general-form" class="settings-card"><h2>General</h2>
+          <div class="setting-row"><label class="field">Robot name<input id="settings-name" maxlength="48" pattern="[A-Za-z0-9 -]+" required autocomplete="off"></label></div>
+          <div class="setting-row"><label class="field">Timezone<select id="settings-timezone" required></select></label></div>
+          <p class="settings-hint">Schedules follow this timezone. Vendor services may need a later restart.</p>
+          <p><strong id="settings-current-time">—</strong></p>
+          <div class="setting-row"><label class="field">NTP server<input id="settings-ntp-server" maxlength="253" pattern="[A-Za-z0-9][A-Za-z0-9.\-]*" required autocomplete="off"></label></div>
+          <div class="setting-row"><span id="ntp-status" role="status">Automatic time</span><button type="button" class="sync-button" id="ntp-sync">Sync now</button></div>
+          <div class="setting-row"><label class="field">Area unit<select id="settings-area-unit"><option value="m2">m²</option><option value="ft2">ft²</option></select></label></div>
+          <label class="option-row"><input type="checkbox" id="settings-over-ridge"><span>Cross obstacles<small>Improves the robot's ability to cross obstacles.</small></span></label>
+          <label class="option-row"><input type="checkbox" id="settings-continue-clean"><span>Resume interrupted cleaning<small>Continues from where the previous clean stopped.</small></span></label>
+          <p id="options-status" class="settings-hint" role="status"></p>
+          <button type="submit" class="primary-button fit" id="general-save">Save</button><p id="general-result" role="status"></p>
+        </form>
+        <form id="audio-form" class="settings-card audio-settings"><h2>Audio</h2>
+          <div class="setting-row"><label class="field">Voice volume <output id="volume-value">—</output><input id="settings-volume" type="range" min="0" max="100" step="10"></label></div>
+          <p class="settings-hint">MP3 · up to 512 KB. First originals are kept.</p>
+          <input type="search" id="voice-search" placeholder="Find a voice" aria-label="Filter voices">
+          <audio id="voice-player" controls class="hidden"></audio>
+          <div id="voices-list" class="voices-list" role="list"></div>
+          <button type="submit" class="primary-button fit" id="audio-save">Save</button><p id="audio-result" role="status"></p>
+        </form>
+        <section class="settings-card"><h2>NOR backup</h2>
+          <p class="settings-hint">Download all 32 MiB of flash. A second complete read must match before saving. Keep the robot idle and powered. Live reads are not an atomic filesystem snapshot.</p>
+          <p class="settings-hint">Contains private Wi-Fi credentials, keys and maps. Keep the backup private.</p>
+          <button type="button" class="primary-button fit" id="nor-start">Read and verify NOR</button>
+          <button type="button" id="nor-cancel" hidden>Cancel</button>
+          <p id="nor-status" role="status"></p><div id="nor-files"></div>
+        </section>
+        <form class="settings-card" id="password-form"><h2>Web password</h2>
+          <label class="field">Current password<input type="password" id="password-current" autocomplete="current-password" required></label>
+          <label class="field">New password<input type="password" id="password-new" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+          <label class="field">Repeat password<input type="password" id="password-repeat" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+          <p class="settings-hint">12–128 characters, without spaces.</p><button class="primary-button fit" type="submit">Save</button>
+        </form>
+        <form class="settings-card" id="telegram-form"><h2>Telegram</h2>
+          <label class="field">Bot token<input type="password" id="telegram-token" autocomplete="off" maxlength="122" placeholder="Paste token from BotFather"></label>
+          <label class="option-row"><input type="checkbox" id="telegram-finished"><span>Cleaning reports (finished or dock)</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-map"><span>Include map</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-errors"><span>Robot errors and recovery</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-docking"><span>Docking completed</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-activity"><span>Cleaning and charging updates</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-battery"><span>Low battery and fully charged</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-system"><span>Restart and Internet connection</span></label>
+          <label class="option-row"><input type="checkbox" id="telegram-commands"><span>Receive commands</span></label>
+          <p id="telegram-receiver" class="settings-hint"></p>
+          <p class="settings-hint">/help · /status · /playsong [1-5] · /getip · /getlastreport · /start2clean · /dock · /reboot</p>
+          <p id="telegram-chat" class="settings-hint"></p>
+          <div class="setting-row"><button type="submit" class="primary-button fit" id="telegram-save">Save</button><button type="button" class="sync-button" id="telegram-link">Link chat</button><button type="button" class="sync-button" id="telegram-test">Send test</button></div>
+          <div id="telegram-pairing" class="hidden"><label class="field">Send this to your bot<input id="telegram-command" readonly aria-label="Telegram linking command"></label><p class="settings-hint">Expires in 5 minutes. Send it in the private chat with this robot’s bot.</p></div>
+          <p id="telegram-result" role="status"></p>
+          <details><summary>Setup and command menu</summary><p class="settings-hint">Create one bot for this robot with <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> → /newbot. Never share its token with another robot. Save the token here, click Link chat, and send the linking command in the bot’s private chat. Then enable Receive commands and Save. Selected notifications are automatic. With several robots, put their bot chats in a Telegram folder.</p><p class="settings-hint">For the command menu, send /setcommands to BotFather, select this bot, then copy and send the complete list below. Commands need no robot name.</p><label class="field">BotFather command list<textarea id="telegram-botfather" readonly rows="6" aria-label="BotFather command list">help - Show help
+status - Robot status and system usage
+playsong - Play a random song or choose 1-5
+getip - Open the local robot web
+getlastreport - Show the last cleaning report and map
+start2clean - Start cleaning (optional power 1-3, default 3)
+dock - Return to the dock
+reboot - Restart the robot</textarea></label><button type="button" id="telegram-select-commands" class="secondary">Select command list</button><p class="settings-hint">Copy the selected text with your device’s Copy action, then paste it into BotFather.</p></details>
+        </form>
+        <form class="settings-card" id="ssh-form"><h2>SSH public key</h2><label class="field">Public key file<input id="ssh-public-key" type="file" accept=".pub,text/plain" required></label><p class="settings-hint">Adds a key and keeps existing access. Upload the .pub file.</p><button type="submit" id="ssh-submit" class="primary-button fit">Save</button><p id="ssh-result" role="status"></p></form>
+      </div><div class="notice hidden" id="settings-result" role="status"></div>
+    </section>
+    <section class="page hidden" id="page-about">
+      <div class="page-heading"><h1>About</h1></div>
+      <div class="settings-card"><h2>Zigma Free</h2><p>Made by bultza with ChatGPT.</p><a href="https://github.com/bultza/zigma-spark-980-free" target="_blank" rel="noopener noreferrer">github.com/bultza/zigma-spark-980-free</a></div>
+      <div class="settings-card"><h2>Installed software</h2><p id="software-status">Open About to read installed versions.</p><div class="software-scroll"><table class="software-table"><thead><tr><th>Component / path</th><th>Version</th><th>Build date</th><th>Status</th></tr></thead><tbody id="software-list"></tbody></table></div></div>
+    </section>
+    <footer class="page-footer"><span>Zigma Free</span><span id="footer-note">Prototype · simulated controls and data</span></footer>
+  </main>
+  <dialog id="schedule-dialog"><form id="schedule-form"><div class="dialog-heading"><div><span class="eyebrow">A SIMPLER ROUTINE</span><h2 id="schedule-dialog-title">New schedule</h2></div><button type="button" class="icon-button" id="close-schedule" aria-label="Close">×</button></div><label class="field">Name<input id="schedule-label" maxlength="48" required placeholder="For example, ready before I get home"></label><div class="schedule-time-row"><label class="field">Start time<input type="time" id="schedule-time" required value="09:30"></label><div><strong>Europe/Madrid</strong><small>Robot local time</small></div></div><fieldset><legend>Repeat on</legend><div class="day-picker" id="day-picker"></div><div class="day-presets"><button type="button" id="weekdays-preset">Weekdays</button><button type="button" id="everyday-preset">Every day</button></div></fieldset><label class="field">Action<select id="schedule-action"><option value="clean">Full clean</option><option value="dock">Return to dock</option><option value="reboot">Reboot robot</option><option value="restore_master">Restore master map</option><option value="random_song">Random song</option><option value="play_song">Play song</option><option value="custom_command">Custom command</option></select></label><label class="field" id="schedule-fan-field">Fan power<select id="schedule-fan-power"><option value="1">1 · Quiet</option><option value="2">2 · Normal</option><option value="3" selected>3 · Full</option></select></label><label class="field hidden" id="schedule-song-field">Song filename<input id="schedule-song" list="schedule-song-list" maxlength="100" placeholder="59.mp3"><datalist id="schedule-song-list"></datalist></label><label class="field hidden" id="schedule-command-field">Command<input id="schedule-command" maxlength="256" spellcheck="false" placeholder="/root/bin/my-script"></label><label class="field hidden" id="schedule-master-field">Master copy<select id="schedule-master"></select></label><p id="schedule-action-note">Starts only when the robot is idle and its state is recent.</p><label class="field hidden" id="schedule-confirm-field"><span><input type="checkbox" id="schedule-action-confirm"> I confirm this automatic action at the selected times.</span></label><div class="form-error hidden" id="schedule-error" role="alert"></div><div class="dialog-footer"><button type="button" class="quiet-button" id="cancel-schedule">Cancel</button><button class="primary-button fit" type="submit">Save schedule</button></div></form></dialog>
+  <dialog id="map-action-dialog"><form method="dialog"><div class="dialog-heading"><h2 id="map-action-title"></h2></div><p id="map-action-detail"></p><label id="map-action-backup-field" class="field hidden"><span><input type="checkbox" id="map-action-backup" checked> Save a backup first</span><small>Uncheck to delete without saving a new copy. This cannot be undone unless you already have a saved copy.</small></label><label id="map-action-typed-field" class="field hidden"><span>Type <strong id="map-action-word">CLEAR</strong> to confirm</span><input id="map-action-typed" autocomplete="off" spellcheck="false"></label><div class="dialog-footer"><button value="cancel" class="quiet-button" formnovalidate>Cancel</button><button value="confirm" class="primary-button fit" id="map-action-confirm">Confirm</button></div></form></dialog>
+  <dialog id="access-dialog"><form id="access-form"><div class="dialog-heading"><h2>Robot access</h2><button type="button" class="icon-button" id="close-access" aria-label="Close">×</button></div><p>Enter the local agent access password. It stays in this tab only.</p><label class="field">Access password<input id="access-key" type="password" autocomplete="off" required></label><div class="form-error hidden" id="access-error" role="alert"></div><div class="dialog-footer"><button type="button" class="quiet-button" id="clear-access">Forget key</button><button class="primary-button fit" type="submit">Connect</button></div></form></dialog>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+</body>
+</html>
