@@ -35,11 +35,11 @@ Source paths are relative to [robot/](robot/). Entries in `bundle.tar.gz` are re
 
 ## Compiling and packaging
 
-Per-component ARM build instructions will go in [src/README.md](../src/README.md) as the sources are added.
+See [src/README.md](../src/README.md) for the toolchain, per-component build commands, and Telegram transport build. Run `python3 src/package-release.py --label dev` from the repository root after building both sets of binaries.
 
-The bundle builder expects ARM executables and transport assets in `robot/build/`, third-party notices in `robot/vendor/`, the version inventory in `robot/versions.json`, and web assets in `web/src/`, all relative to this directory. The wizard checks the distribution's `SHA256SUMS` before starting an installation.
+The packager puts the ARM executables and transport assets in `robot/build/`, third-party notices in `robot/vendor/`, the version inventory in `robot/versions.json`, and web assets in `web/src/` inside the archive. It writes ZIP and TAR.GZ archives with SHA-256 sidecars. The wizard checks the internal `SHA256SUMS` before starting an installation.
 
-
+The generated archives use launchers under `computer/`. The original V1.0 archives use launchers at the archive root.
 
 ## Full installation walkthrough
 

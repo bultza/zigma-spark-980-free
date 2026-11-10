@@ -13,6 +13,8 @@ Use the installation wizard to set up Zigma Free on a Zigma Spark-980. The wizar
 
 ## Run the wizard
 
+The original V1.0 package puts the launchers in the top-level folder. In packages built from this repository, they are under `computer/`.
+
 1. On Windows, double-click `start-windows.cmd`. On Linux, open a terminal in the extracted folder and run `sh start-linux.sh`. Run the wizard as your regular user.
 2. Choose **New installation** if the wizard offers a choice.
 3. Give your robot a nice name.

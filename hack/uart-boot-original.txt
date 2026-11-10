@@ -1,0 +1,230 @@
+U-Boot SPL 2017.01-rc2 (Jun 09 2020 - 14:18:49)
+DRAM: 64 MiB
+Trying to boot from SPI
+
+U-Boot 2017.01-rc2 (Jun 09 2020 - 14:18:49 +0800) Amicro
+
+Model: Linux SDK
+DRAM:  64 MiB
+SF: Detected mx25l25635f with page size 256 Bytes, erase size 64 KiB, total 32 MiB
+*** Warning - bad CRC, using default environment
+
+In:    serial@01c28800
+Out:   serial@01c28800
+Err:   serial@01c28800
+
+
+U-Boot 2017.01-rc2 (Jun 09 2020 - 14:18:49 +0800) Amicro
+
+Model: Linux SDK
+DRAM:  64 MiB
+SF: Detected mx25l25635f with page size 256 Bytes, erase size 64 KiB, total 32 MiB
+*** Warning - bad CRC, using default environment
+
+In:    serial@01c28800
+Out:   serial@01c28800
+Err:   serial@01c28800
+SF: Detected mx25l25635f with page size 256 Bytes, erase size 64 KiB, total 32 MiB
+device 0 offset 0x100000, size 0x10000
+SF: 65536 bytes @ 0x100000 Read: OK
+device 0 offset 0x110000, size 0x300000
+SF: 3145728 bytes @ 0x110000 Read: OK
+## Flattened Device Tree blob at 41800000
+   Booting using the fdt blob at 0x41800000
+   Loading Device Tree to 42dfa000, end 42dffcb6 ... OK
+
+Starting kernel ...
+
+[    0.001707] /cpus/cpu@0 missing clock-frequency property
+[    0.136714] cpufreq: set policy PERFORMANCE
+[    0.167524] am580-codec 1c22c00.codec: ASoC: /soc/codec-analog@01c23000 not registered
+[    0.175562] am580-codec 1c22c00.codec: Failed to register our card
+release_version: 2b8a8b4b0 2020.06.09 14:18:39
+Starting mdev...
+Sun Sep  1 00:00:00 CST 2019
+[INIT] power on ...
+madplay start
+MPEG Audio Decoder 0.15.2 (beta) - Copyright (C) 2000-2004 Robert Leslie et al.
+madplay start done
+[INIT] starting app server
+120 frames decoded (0:00:04.3), -1.3 dB peak amplitude, 0 clipped samples
+[INIT] starting hoslam
+[    4.350247] spi_slave_irq: loading out-of-tree module taints kernel.
+[    4.372989] spi_irq initialized.
+OK
+[    5.317334] am580-mmc 1c10000.mmc: card claims to support voltages below defined range
+[    6.040759] spi_irq open.
+[    7.427231] am580-mmc 1c10000.mmc: card claims to support voltages below defined range
+[    8.829452] RTW: module init start
+[    8.832939] RTW: rtl8189fs v5.7.9_35795.20191128
+[    8.837576] RTW: build time: Apr 16 2020 14:21:52
+[    8.862124] RTW: == SDIO Card Info ==
+[    8.865890] RTW:   card: c3a6c800
+[    8.869229] RTW:   clock: 25000000 Hz
+[    8.872901] RTW:   timing spec: sd high-speed
+[    8.877272] RTW:   sd3_bus_mode: FALSE
+[    8.881029] RTW:   func num: 1
+[    8.884092] RTW:   func1: c307bc00 (*)
+[    8.887846] RTW: ================
+[    9.022852] RTW: HW EFUSE
+[    9.025539] RTW: 0x000: 29 81 03 CC  00 00 50 00  00 00 04 CC  0A 0C 00 00  
+[    9.032640] RTW: 0x010: 28 28 26 26  26 26 2A 2A  28 28 28 02  FF FF FF FF  
+[    9.039728] RTW: 0x020: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.046822] RTW: 0x030: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.053911] RTW: 0x040: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.061002] RTW: 0x050: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.068083] RTW: 0x060: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.075164] RTW: 0x070: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.082255] RTW: 0x080: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.089337] RTW: 0x090: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.096423] RTW: 0x0A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.103512] RTW: 0x0B0: FF FF FF FF  FF FF FF FF  20 38 1F 00  00 00 00 FF  
+[    9.110594] RTW: 0x0C0: FF 2A 00 10  00 FF 00 FF  00 00 FF FF  FF FF FF FF  
+[    9.117674] RTW: 0x0D0: 3E 10 01 12  23 FF FF FF  20 04 4C 02  79 F1 21 02  
+[    9.124754] RTW: 0x0E0: 0C 00 22 04  00 08 00 32  FF 21 02 0C  00 22 2A 01  
+[    9.131849] RTW: 0x0F0: 01 00 00 00  00 00 00 00  00 00 00 00  02 00 FF FF  
+[    9.138931] RTW: 0x100: 00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00  
+[    9.146010] RTW: 0x110: 00 EB 00 6E  01 00 00 00  00 FF [MAC redacted]  
+[    9.153090] RTW: 0x120: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.160170] RTW: 0x130: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.167249] RTW: 0x140: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.174329] RTW: 0x150: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.181414] RTW: 0x160: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.188495] RTW: 0x170: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.195567] RTW: 0x180: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.202646] RTW: 0x190: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.209726] RTW: 0x1A0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.216806] RTW: 0x1B0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.223886] RTW: 0x1C0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.230966] RTW: 0x1D0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.238045] RTW: 0x1E0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.245125] RTW: 0x1F0: FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF  
+[    9.252235] RTW: hal_com_config_channel_plan chplan:0x20
+[    9.466523] RTW: rtw_regsty_chk_target_tx_power_valid return _FALSE for band:0, path:0, rs:0, t:-1
+[    9.480656] RTW: rtw_ndev_init(wlan0) if1 mac_addr=[MAC redacted]
+[    9.489114] RTW: rtw_ndev_init(wlan1) if2 mac_addr=[MAC redacted]
+[    9.804576] RTW: module init ret=0
+[Factory Mode] start ...
+[Factory Mode] firmware downloader start ...
+[   10.289331] usb_phy_generic usb_phy_generic.0.auto: usb_phy_generic.0.auto supply vcc not found, using dummy regulator
+[INIT] Starting network: 
+[Factory Mode] set led mode: 1
+[   11.901407] RTW: wlan0- hw port(0) mac_addr =[MAC redacted]
+[   11.907778] RTW: wlan1- hw port(1) mac_addr =[MAC redacted]
+OK
+[INIT] starting ygclient
+[INIT] starting daemon
+[daemon] daemon start, version: 2.2
+[daemon] register signal handler
+[daemon] wait client connect...
+uart debug server start
+[   13.992148] RTW: nolinked power save enter
+[   16.115880] RTW: wlan0- hw port(0) mac_addr =[MAC redacted]
+[   16.122519] RTW: wlan1- hw port(1) mac_addr =[MAC redacted]
+[   16.141988] RTW: nolinked power save leave
+[   17.754696] RTW: nolinked power save enter
+[   18.392825] RTW: wlan0- hw port(0) mac_addr =[MAC redacted]
+[   18.398893] RTW: wlan1- hw port(1) mac_addr =[MAC redacted]
+[   18.410717] RTW: nolinked power save leave
+[   18.416718] RTW: rtw_set_802_11_connect(wlan0)  fw_state=0x00000008
+[   18.631297] RTW: start auth
+[   18.636145] RTW: auth success, start assoc
+[   18.649008] RTW: assoc success
+[   18.659308] RTW: ============ STA [[MAC redacted]]  ===================
+[   18.666274] RTW: mac_id : 0
+[   18.669083] RTW: wireless_mode : 0x0b
+[   18.672770] RTW: mimo_type : 0
+[   18.675832] RTW: static smps : N
+[   18.679066] RTW: bw_mode : 20MHz, ra_bw_mode : 20MHz
+[   18.684032] RTW: rate_id : 3
+[   18.686924] RTW: rssi : -1 (%), rssi_level : 0
+[   18.691371] RTW: is_support_sgi : Y, is_vht_enable : N
+[   18.696510] RTW: disable_ra : N, disable_pt : N
+[   18.701041] RTW: is_noisy : N
+[   18.704013] RTW: txrx_state : 0
+[   18.707160] RTW: curr_tx_rate : CCK_1M (L)
+[   18.711259] RTW: curr_tx_bw : 20MHz
+[   18.714761] RTW: curr_retry_ratio : 0
+[   18.718429] RTW: ra_mask : 0x00000000000fffff
+[   18.718429] 
+[   18.733003] RTW: recv eapol packet 1/4
+[   18.752414] RTW: send eapol packet 2/4
+[   18.780491] RTW: recv eapol packet 3/4
+[   18.786380] RTW: send eapol packet 4/4
+[   18.792539] RTW: set pairwise key camid:0, addr:[MAC redacted], kid:0, type:AES
+[   18.807428] RTW: set group key camid:1, addr:[MAC redacted], kid:1, type:AES
+[daemon] set daemon oom_score_adj: -1000
+                                        [daemon] set factory_mode oom_score_adj: -1000
+                                                                                      [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                                                               [daemon] memory_monitor: demo_rplidar use (5652, 4195, 3596) KB
+            [daemon] memory_monitor: wifi_app_server_grit use (1412, 472, 340) KB
+                                                                                 [daemon] memory_monitor: ygclient use (2972, 1621, 1048) KB
+                                                                                                                                            [daemon] memory_monitor: tcp/udp use 0 KB
+   [daemon] memory_monitor: demo_rplidar use (5656, 4217, 3600) KB
+                                                                  [daemon] memory_monitor: wifi_app_server_grit use (1412, 489, 340) KB
+                                                                                                                                       [daemon] memory_monitor: ygclient use (2972, 1636, 1048) KB
+                [daemon] memory_monitor: tcp/udp use 0 KB
+                                                         [daemon] memory_monitor: demo_rplidar use (5656, 4198, 3600) KB
+                                                                                                                        [daemon] memory_monitor: wifi_app_server_grit use (1412, 472, 340) KB
+           [daemon] memory_monitor: ygclient use (2972, 1622, 1048) KB
+                                                                      [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                                               [daemon] memory_monitor: demo_rplidar use (5668, 4209, 3612) KB
+                                                                                                                                                                              [daemon] memory_monitor: wifi_app_server_grit use (1412, 468, 340) KB
+                                                                 [daemon] memory_monitor: ygclient use (2972, 1622, 1048) KB
+                                                                                                                            [Factory Mode] wait connect timeout, firmware downloader exit
+       [Factory Mode] set led mode: 0
+                                     [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                              [daemon] memory_monitor: demo_rplidar use (5668, 4250, 3612) KB
+                                                                                                                                             [daemon] memory_monitor: wifi_app_server_grit use (1412, 508, 340) KB
+                                [daemon] memory_monitor: ygclient use (2972, 1652, 1048) KB
+                                                                                           [daemon] memory_monitor: tcp/udp use 8 KB
+                                                                                                                                    [daemon] memory_monitor: demo_rplidar use (5676, 4253, 3620) KB
+                 [daemon] memory_monitor: wifi_app_server_grit use (1412, 505, 340) KB
+                                                                                      [daemon] memory_monitor: ygclient use (4124, 2700, 2072) KB
+                                                                                                                                                 [daemon] daemon is running
+                                                                                                                                                                           [   73.444008] RTW: clear key for addr:[MAC redacted], camid:0
+[   73.456646] RTW: clear key for addr:[MAC redacted], camid:1
+[daemon] ygclient is not running
+                                [daemon] ygclient is not running
+                                                                [   77.798372] RTW: nolinked power save enter
+[daemon] ygclient is not running
+                                [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                         [daemon] memory_monitor: demo_rplidar use (5676, 4709, 4540) KB
+                                                                                                                                        [daemon] memory_monitor: wifi_app_server_grit use (1416, 565, 344) KB
+                           [daemon] ygclient is not running
+                                                           [daemon] ygclient is not running
+                                                                                           [daemon] restart ygclient ...
+                                                                                                                        killall: ygclient: no process killed
+                                                                                                                                                            [INIT] starting ygclient
+  [daemon] memory_monitor: tcp/udp use 0 KB
+                                           [daemon] memory_monitor: demo_rplidar use (5676, 4228, 3632) KB
+                                                                                                          [daemon] memory_monitor: wifi_app_server_grit use (1416, 524, 344) KB
+                                                                                                                                                                               [daemon] memory_monitor: ygclient use (4012, 2581, 1984) KB
+                                                        [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                                 [daemon] memory_monitor: demo_rplidar use (5676, 4280, 3632) KB
+                                                                                                                                                                [daemon] memory_monitor: wifi_app_server_grit use (1416, 525, 344) KB
+                                                   [daemon] memory_monitor: ygclient use (4044, 2659, 2016) KB
+                                                                                                              [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                                                                                       [daemon] memory_monitor: demo_rplidar use (5676, 4280, 3632) KB
+                                    [daemon] memory_monitor: wifi_app_server_grit use (1416, 525, 344) KB
+                                                                                                         [daemon] memory_monitor: ygclient use (4044, 2659, 2016) KB
+                                                                                                                                                                    [daemon] memory_monitor: tcp/udp use 0 KB
+                           [daemon] memory_monitor: demo_rplidar use (5676, 4280, 3632) KB
+                                                                                          [daemon] memory_monitor: wifi_app_server_grit use (1416, 525, 344) KB
+                                                                                                                                                               [daemon] memory_monitor: ygclient use (4084, 2699, 2056) KB
+                                        [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                 [daemon] memory_monitor: demo_rplidar use (5676, 4280, 3632) KB
+                                                                                                                                                [daemon] memory_monitor: wifi_app_server_grit use (1416, 525, 344) KB
+                                   [daemon] memory_monitor: ygclient use (4084, 2699, 2056) KB
+                                                                                              [daemon] daemon is running
+                                                                                                                        [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                                                                                                 [daemon] memory_monitor: demo_rplidar use (5676, 4280, 3632) KB
+                                              [daemon] memory_monitor: wifi_app_server_grit use (1416, 525, 344) KB
+                                                                                                                   [daemon] memory_monitor: ygclient use (4084, 2699, 2056) KB
+                                                                                                                                                                              [daemon] memory_monitor: tcp/udp use 0 KB
+                                     [daemon] memory_monitor: demo_rplidar use (5676, 4230, 3632) KB
+                                                                                                    [daemon] memory_monitor: wifi_app_server_grit use (1416, 485, 344) KB
+                                                                                                                                                                         [daemon] memory_monitor: ygclient use (4120, 2718, 2092) KB
+                                                  [daemon] memory_monitor: tcp/udp use 0 KB
+                                                                                           [daemon] memory_monitor: demo_rplidar use (5676, 4280, 3632) KB
+                                                                                                                                                          [daemon] memory_monitor: wifi_app_server_grit use (1416, 525, 344) KB

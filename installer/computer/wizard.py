@@ -652,7 +652,7 @@ def main():
                     print('Automatic reconnect failed. Select your home Wi-Fi NOW in system settings.')
             wait_until(lambda: restored(network), 45,
                 'Home Wi-Fi/original IP not restored. Reconnect manually; do not resend pairing blindly. '
-                'Session files are saved; see troubleshooting in WIZARD.md.', label='Home Wi-Fi and original IPv4', quiet=True)
+                'Session files are saved; see troubleshooting in README.md.', label='Home Wi-Fi and original IPv4', quiet=True)
             print(f'Home Wi-Fi restored after {time.monotonic() - started:.1f}s.')
             print('PLEASE BE PATIENT: allow about 60 seconds for the robot to follow you home and start downloading (63-75s observed after pairing). Keep this window open; no action is needed.', flush=True)
             seen = {}

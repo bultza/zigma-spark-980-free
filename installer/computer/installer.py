@@ -59,7 +59,7 @@ def files_for(profile, telegram=False, source_paths=None):
             add('stack/'+name, ROBOT/'build'/name)
         for name in ('zigma-mode','zigma-mode-backend','zigma-free-service','zigma-cron','zigma-settings'):
             add('stack/'+name, ROBOT/'src'/name)
-        for name in ('index.html','app.js','style.css','nor.js'):
+        for name in ('index.html','app.js','style.css','nor.js','favicon.svg'):
             add('stack/src/'+name,HERE.parent/'web/src'/name,0o644)
         add('stack/licenses/cJSON.txt',ROBOT/'vendor/cjson/LICENSE',0o644)
         add('stack/licenses/MbedTLS.txt',ROBOT/'vendor/mbedtls/LICENSE',0o644)

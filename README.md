@@ -1,10 +1,10 @@
 # Zigma Free
 
-In August 2026, all Zigma Spark-980 robots lost its WiFi connectivity all over the world. During the investigation, we captured a command delivered through the cloud service that disables the Wi-Fi on the robot (an auto destruct command!). A similar loss of app control affected the Redmond RV-R670S in October, when we found expired TLS certificates on the service's HTTPS endpoints.
+In August 2026, all Zigma Spark-980 robots lost its WiFi connectivity all over the world. During the investigation, we captured a command delivered through the cloud service that disables the Wi-Fi on the robot (an auto destruct command!). A similar loss of app control affected the Redmond RV-R670S in October, when we found expired TLS certificates on the service's HTTPS endpoints. [Skip to how we discovered access](#how-we-discovered-access) if you’re here for the hack.
 
 I started building Zigma Free to get my robot back under my control and make it easier to use. More than anything, I wanted it to clean my house every day on its own again.
 
-You can control the vacuum from a web browser on your local network, over SSH, or through a Telegram bot when you're away from home. Everyday control works independently of the manufacturer's cloud. The live LiDAR view shows what the robot's laser scanner detects.
+With Zigma Free, you can control the vacuum from a web browser on your local network, over SSH, or through a Telegram bot when you're away from home. Everyday control works independently of the manufacturer's cloud. The live LiDAR view shows what the robot's laser scanner detects.
 
 Daily cleaning schedules run on the robot's own clock, so they work even without Wi-Fi. If the robot loses track of time after being powered off, set the clock again so cleaning starts at the right time.
 
@@ -32,20 +32,36 @@ The web interface and control software run on the robot itself. The original nav
 - Adjust voice volume and manage voice prompts.
 - Access the robot over SSH or control it remotely through Telegram.
 
-![Zigma Free settings showing robot, audio, and access options](images/zigma-free-settings-desktop-cropped.png)
+![Animated demo of the Zigma Free web interface](images/video_usage.gif)
 
 ## Zigma Spark-980 hardware
 During the investigation we used 3 different robots, the three of them with different versions and in at least one, a totally different linux partition. This makes it particularly difficult because even if they use the same hardware, in some of the robots the internal storage has a permanent change applied that is not compatible with the kernel of other robots.
+
+The robot has two main PCBs. The **AM580 main logic board** runs Linux, and the **AM380 chassis controller board** handles low-level chassis control.
+
 - **Processor and RAM:** Amicro AM580 (`amicro,am580`). and 64 MiB of DRAM.
 - **Storage:** 32 MiB (256 Mbit) of Macronix SPI NOR flash, identified as MX25L25635F/MX25L25645G.
 - **Wi-Fi:** 2.4 GHz Wi-Fi via SDIO. The stock Linux kernel uses the Realtek `rtl8189fs` driver.
 - **UART:** The main board exposes a 3.3 V TTL serial console at 115200 baud, 8N1, with no flow control. The stock software takes over the console during boot.
 
+![Both sides of the AM580 main logic board and AM380 chassis controller board](images/zigma-spark-980-boards.jpg)
+
+*AM580 main logic board in the top row and AM380 chassis controller board in the bottom row. Top views are on the left and bottom views on the right.*
+
 ## How to install
 On a Windows or Linux computer with Python 3.10 or later, download and extract the [latest release package](https://github.com/bultza/zigma-spark-980-free/releases). Then follow the detailed instructions from here: [Install Zigma Free](installer/README.md)
 
+> [!WARNING]
+> Building from source is an advanced option. For most users, we recommend the release package above. If you want to build it yourself, follow the [manual build instructions](src/README.md).
+
+## Instructions and troubleshooting
+
+See [Instructions and troubleshooting](USAGE.md) for how to use your brand new robot, how to add SSH public keys after installation and recover access if you move house or lose your old computer.
+
 ## How we discovered access
 First we tried UART access control but the TTY is hitjacked by the onboard software during boot, then we tried to dump the SPI memory directly from the main PCB board and dumped back a script to enable SSH, from there we found other a way to interrupt the UART hijack and after that we managed to discover a "Software only" way to access any new robots, then we saw how Zigma was sending us the "auto-destruct" command. For more details you can follow here: - [How we hacked it](hack/HISTORY.md) follows the investigation from Wi-Fi pairing to local control.
+
+![Zigma Free settings showing robot, audio, and access options](images/zigma-free-settings-desktop-cropped.png)
 
 ## Plan for the future
 
@@ -72,3 +88,6 @@ The plan is to replace components in stages and test cleaning, mapping, docking,
 ## Extra Guides
 - [Manual hack](hack/MANUAL-HACK.md) explains how to enable and verify SSH access on your own robot.
 
+## License
+
+Zigma Free's original software is available under the [MIT License](LICENSE). Third-party components retain their own licences. See the notices for [cJSON](src/robot/vendor/cjson/LICENSE) and [Mbed TLS](src/robot/vendor/mbedtls/LICENSE). New deployment archives also include the [third-party notices](src/robot/vendor/notices/README.md) for musl, the GCC runtime, and the Telegram transport and CA bundle.
