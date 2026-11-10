@@ -170,7 +170,10 @@ On Caccamora, we captured an incoming WebSocket message inside the running clien
 rm -rf /root/yg/etc/wpa_supplicant.conf && killall wpa_supplicant && killall ygclient
 ```
 
-It deletes the saved Wi-Fi configuration, stops the Wi-Fi process, and then stops the cloud client itself. The robot dropped off the network. That was the command we started calling “auto-destruct”. From that moment on, I could only start cleaning with the buttons on the robot or the IR remote. I thought about using an Arduino and an IR LED to send the command every day, but then I would need one for each robot.
+> [!CAUTION]
+> **The “auto-destruct” command.** It deletes the saved Wi-Fi configuration, stops the Wi-Fi process, and then stops the cloud client itself. Caccamora dropped off the network when it ran.
+
+From that moment on, I could only start cleaning with the buttons on the robot or the IR remote. I thought about using an Arduino and an IR LED to send the command every day, but then I would need one for each robot.
 
 We later reproduced the same reply from a computer by sending an empty `update_shadow` message to the cloud service. The reply matched the one captured on the robot byte for byte. The computer only inspected the reply. The capture confirmed that the service delivered it, and we could not tell who or what had triggered it.
 
