@@ -10,9 +10,18 @@ if ! command -v nmcli >/dev/null 2>&1; then
  exit 1
 fi
 if [ ! -x .wizard-venv/bin/python ]; then
- python3 -m venv .wizard-venv || { echo 'Install python3-venv using your distribution package manager.' >&2; exit 1; }
+ python3 -m venv --without-pip .wizard-venv || { echo 'Install Python venv support using your distribution package manager.' >&2; exit 1; }
 fi
 if ! .wizard-venv/bin/python -c 'import paramiko, cryptography' 2>/dev/null; then
+ if ! .wizard-venv/bin/python -m pip --version >/dev/null 2>&1; then
+  echo 'Restoring pip in the installer environment...'
+  if ! .wizard-venv/bin/python -m ensurepip --upgrade ||
+     ! .wizard-venv/bin/python -m pip --version >/dev/null 2>&1; then
+   echo 'Python could not bootstrap pip. On Debian/Ubuntu, run: sudo apt install python3-venv' >&2
+   echo 'If you use a specific Python version, install its matching venv package, then rerun start-linux.sh.' >&2
+   exit 1
+  fi
+ fi
  echo 'Preparing Python dependencies. Stay connected to your home Internet.'
  .wizard-venv/bin/python -m pip install -r requirements-wizard.txt
 fi

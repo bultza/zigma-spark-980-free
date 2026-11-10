@@ -90,10 +90,15 @@ def stage_package(root):
         '(https://github.com/bultza/zigma-spark-980-free/blob/main/src/README.md)',
     )
     (root / 'BUILD.md').write_text(build_guide)
-    guide = (REPO / 'installer/README.md').read_text()
-    guide = guide.replace('double-click `start-windows.cmd`', 'double-click `computer/start-windows.cmd`')
-    guide = guide.replace('run `sh start-linux.sh`', 'run `sh computer/start-linux.sh`')
-    (root / 'README.md').write_text(guide)
+    copy(REPO / 'installer/README.md', 'README.md')
+    (root / 'start-windows.cmd').write_bytes(
+        b'@echo off\r\ncall "%~dp0computer\\start-windows.cmd" %*\r\n'
+    )
+    linux_launcher = root / 'start-linux.sh'
+    linux_launcher.write_text(
+        '#!/bin/sh\nexec sh "$(dirname "$0")/computer/start-linux.sh" "$@"\n'
+    )
+    linux_launcher.chmod(0o755)
 
     # Validate the same files and versions the wizard uses to generate its payload.
     installer = runpy.run_path(str(root / 'computer/installer.py'))

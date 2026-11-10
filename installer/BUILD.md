@@ -39,7 +39,7 @@ See [src/README.md](../src/README.md) for the toolchain, per-component build com
 
 The packager puts the ARM executables and transport assets in `robot/build/`, third-party notices in `robot/vendor/`, the version inventory in `robot/versions.json`, and web assets in `web/src/` inside the archive. It writes ZIP and TAR.GZ archives with SHA-256 sidecars. The wizard checks the internal `SHA256SUMS` before starting an installation.
 
-The generated archives use launchers under `computer/`. The original V1.0 archives use launchers at the archive root.
+The deployment archive exposes `start-windows.cmd` and `start-linux.sh` at the top level. They delegate to the launchers under `computer/`.
 
 ## Full installation walkthrough
 

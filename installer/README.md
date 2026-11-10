@@ -6,14 +6,14 @@ Use the installation wizard to set up Zigma Free on a Zigma Spark-980. The wizar
 
 - The robot needs a 2.4 GHz network and must be able to reach the computer. Allow inbound TCP port 8000 for Python on your home network.
 - Download the deployment archive from [GitHub Releases](https://github.com/bultza/zigma-spark-980-free/releases) and extract the entire archive.
-- Use a Windows 10/11 or Linux computer with Wi-Fi and Python 3.10 or later. On Linux, you also need NetworkManager (`nmcli`) and Python's `venv` and `pip`.
+- Use a Windows 10/11 or Linux computer with Wi-Fi and Python 3.10 or later. On Linux, you also need NetworkManager (`nmcli`) and Python's `venv` and `pip`. On Debian or Ubuntu, install `python3-venv` if Python cannot create an environment or bootstrap pip.
 - If Windows blocks `start-windows.cmd`, right-click it, open **Properties → General**, and select **Unblock** under **Security** if that option appears.
 - Connect your computer to the Wi-Fi network the robot will use. We are going to emulate the Android app's pairing process, so the wizard needs your computer's IP address on that network before we start. The robot will connect to your Wi-Fi and download the installation files from your computer.
 - The wizard needs internet access on its first run to install Python dependencies. The robot does not need internet access to install Zigma Free. If your router lets you block internet access for the robot while keeping it reachable on your home network, you can do that before installation to avoid contact with the old cloud. The wizard redirects known vendor hostnames in the robot’s `/etc/hosts`. On a robot without SSH, this happens after its first connection to your home Wi-Fi. Direct IP connections are still possible.
 
 ## Run the wizard
 
-The original V1.0 package puts the launchers in the top-level folder. In packages built from this repository, they are under `computer/`.
+After extracting the deployment archive, open its top-level folder. The Windows and Linux launchers are there.
 
 1. On Windows, double-click `start-windows.cmd`. On Linux, open a terminal in the extracted folder and run `sh start-linux.sh`. Run the wizard as your regular user.
 2. Choose **New installation** if the wizard offers a choice.

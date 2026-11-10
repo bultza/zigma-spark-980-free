@@ -61,7 +61,7 @@ python3 src/package-release.py --label dev
 
 The packager assembles the computer and robot scripts, compiled musl ARM binaries, browser assets, version catalog, and dependency notices. The archives include the [third-party notices](robot/vendor/notices/README.md), the upstream musl source archive, and the matching Mozilla CA source. It checks that the installer can build a full payload, then writes a ZIP and a TAR.GZ to `dist/`, each with a matching `.sha256` file. Use `--output-dir` for a different destination. Choose a new label if the output files already exist.
 
-Extract the whole archive before running it. Open `computer/start-windows.cmd` on Windows or run `sh computer/start-linux.sh` on Linux. The archive contains its own installation guide and file checksum manifest. For the installation flow and file layout, see [installer/BUILD.md](../installer/BUILD.md).
+Extract the whole archive before running it. Open `start-windows.cmd` on Windows or run `sh start-linux.sh` on Linux from the top-level folder. The archive contains its own installation guide and file checksum manifest. For the installation flow and file layout, see [installer/BUILD.md](../installer/BUILD.md).
 
 ## Historical V1.0 packages
 
