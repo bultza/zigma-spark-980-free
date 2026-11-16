@@ -43,6 +43,18 @@ For an individual component, run `make -C src/robot TARGET` using a target from 
 
 The version header is generated from `src/robot/versions.json`. The browser assets are copied directly into the deployment archive.
 
+## No-go zone adapter profiles
+
+`zigma-zones-arm` V1.2 verifies the executable identity and SHA-256 of the app-server queue receiver. The original `4cf07099…` profile retains its type 1 JSON command. The Puron `784fbcda…` profile requires the original `b10fc7b4…` navigation receiver and sends classified quadrilaterals directly on the navigation queue: type 6 applies the complete set; one type 16 request reads the resulting configuration back through the native app-server. Unknown identities are rejected. The Puron navigation build is not supported by this editing path.
+
+This avoids Puron's incompatible JSON parser and its truncated legacy zone-cache allocation. Coordinates, restrictions, backups, idle/error checks, unchanged-map checks and confirmation remain part of the existing web/API flow. No periodic map requests are enabled. `--dry-run` validates and prints the canonical input JSON without accessing IPC; it does not exercise a running firmware profile.
+
+Run the offline command and observer regressions with:
+
+```sh
+make -C src/robot test-zone-commands test-puron-zones
+```
+
 ## Build the Telegram HTTPS transport
 
 ```sh

@@ -145,8 +145,14 @@ static int open_cache(void){
  if(!zigma_native_process(cache_pid,"/root/app_server/wifi_app_server_grit"))return -1;
  snprintf(path,sizeof(path),"/proc/%d/mem",cache_pid);return open(path,O_RDONLY);
 }
+#include "zigma_puron_settings.h"
 static void enrich_status(cJSON *status){
- int fd=open_cache();if(fd<0)return;bool ok=cached_status(status,fd);close(fd);if(!ok)return;
+ int fd=open_cache();if(fd<0)return;
+ bool ok;
+ if(puron_settings_process(cache_pid)){
+  ok=cached_puron_status(status,fd);cached_puron_settings(status,fd);
+ }else ok=cached_status(status,fd);
+ close(fd);if(!ok)return;
  /* Queue activity is link evidence, never a timestamp for this status block. */
  key_t key=ftok("/",15);int q=key==(key_t)-1?-1:msgget(key,0);struct msqid_ds info;
  if(q>=0&&!msgctl(q,IPC_STAT,&info)&&info.msg_rtime>0){
@@ -155,18 +161,21 @@ static void enrich_status(cJSON *status){
   if(tgid==cache_pid)replace_value(status,"local_link_received_at",cJSON_CreateNumber(info.msg_rtime));
  }
 }
-static bool cached_zones(cJSON *map,int fd){
- uint32_t pointer=0,count=0,again=0;if(!memory_read(fd,0x49d5c,&pointer,4)||!pointer||!memory_read(fd,pointer,&count,4)||count>64)return false;
- size_t size=4+(size_t)count*36;unsigned char a[2308],b[2308];if(!memory_read(fd,pointer,a,size)||!memory_read(fd,pointer,b,size)||memcmp(a,b,size)||memcmp(a,&count,4)||!memory_read(fd,0x49d5c,&again,4)||again!=pointer)return false;
+static bool cached_zones_at(cJSON *map,int fd,uint32_t slot){
+ uint32_t pointer=0,count=0,again=0;if(!memory_read(fd,slot,&pointer,4)||!pointer||!memory_read(fd,pointer,&count,4)||count>64)return false;
+ size_t size=4+(size_t)count*36;unsigned char a[2308],b[2308];if(!memory_read(fd,pointer,a,size)||!memory_read(fd,pointer,b,size)||memcmp(a,b,size)||memcmp(a,&count,4)||!memory_read(fd,slot,&again,4)||again!=pointer)return false;
  cJSON *origin=get(map,"map_origin"),*zones=cJSON_CreateArray();double ox=cJSON_GetArrayItem(origin,0)->valuedouble,oy=cJSON_GetArrayItem(origin,1)->valuedouble;
  for(uint32_t i=0;i<count;i++){uint32_t type;memcpy(&type,a+4+i*36,4);if(type>3){cJSON_Delete(zones);return false;}cJSON *zone=cJSON_CreateObject(),*points=cJSON_CreateArray();
   for(int j=0;j<4;j++){float x,y;memcpy(&x,a+8+i*36+j*8,4);memcpy(&y,a+12+i*36+j*8,4);if(!isfinite(x)||!isfinite(y)||fabs(x)>20000||fabs(y)>20000){cJSON_Delete(points);cJSON_Delete(zone);cJSON_Delete(zones);return false;}cJSON *point=cJSON_CreateObject();cJSON_AddNumberToObject(point,"x",x+ox);cJSON_AddNumberToObject(point,"y",-y+oy);cJSON_AddItemToArray(points,point);}
   cJSON_AddItemToObject(zone,"points",points);cJSON_AddBoolToObject(zone,"can_clean",type!=2&&type!=3);cJSON_AddBoolToObject(zone,"can_mop",type!=1&&type!=3);cJSON_AddNumberToObject(zone,"id",i+1);cJSON_AddStringToObject(zone,"source","vendor_cache");cJSON_AddItemToArray(zones,zone);
  }replace_value(map,"zones",zones);cJSON_AddBoolToObject(map,"zones_available",true);cJSON_AddNumberToObject(map,"zones_read_at",time(NULL));return true;
 }
+static bool cached_zones(cJSON *map,int fd){return cached_zones_at(map,fd,0x49d5c);}
 static bool enrich_zones(cJSON *map){
  if(!cache_pid){return false;}char file[128];if(!zigma_native_process(cache_pid,"/root/app_server/wifi_app_server_grit"))return false;
- snprintf(file,sizeof(file),"/proc/%d/mem",cache_pid);int fd=open(file,O_RDONLY);if(fd<0)return false;bool ok=cached_zones(map,fd);close(fd);return ok;
+ snprintf(file,sizeof(file),"/proc/%d/mem",cache_pid);int fd=open(file,O_RDONLY);if(fd<0)return false;
+ bool ok=puron_settings_process(cache_pid)?cached_zones_at(map,fd,0x4989c):cached_zones(map,fd);
+ close(fd);return ok;
 }
 /* Configuration replies can replace the full map in SHM. Keep raster/path as
  * received and refresh only the independently observed zone cache. */

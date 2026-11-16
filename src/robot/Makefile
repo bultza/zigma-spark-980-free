@@ -27,7 +27,7 @@ $(OUTPUT)/zigma-observe-arm: src/zigma_observe.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-core-arm: src/zigma_core.c src/zigma_local_ipc.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-network-arm: src/zigma_network.c
 $(OUTPUT)/zigma-area-arm: src/zigma_area.c
-$(OUTPUT)/zigma-zones-arm: src/zigma_zones.c $(CJSON)
+$(OUTPUT)/zigma-zones-arm: src/zigma_zones.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-maps-arm: src/zigma_maps.c $(CJSON)
 $(OUTPUT)/zigma-options-arm: src/zigma_options.c
 $(OUTPUT)/zigmactl: src/zigmactl.c $(CJSON)
@@ -46,3 +46,29 @@ transport: $(SDK)/.ready
 
 $(SDK)/.ready: tools/install-arm-toolchain.sh
 	sh tools/install-arm-toolchain.sh build/toolchain
+
+# Host-only regression test: synthetic process memory, no robot access.
+HOST_CC ?= cc
+.PHONY: test-puron-settings
+test-puron-settings:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_puron_settings.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-puron-settings
+	build/tests/test-puron-settings
+
+.PHONY: test-navigation
+test-navigation:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_navigation.c $(CJSON) -lm -o build/tests/test-navigation
+	build/tests/test-navigation
+
+.PHONY: test-puron-zones
+test-puron-zones:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_puron_zones.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-puron-zones
+	build/tests/test-puron-zones
+
+.PHONY: test-zone-commands
+test-zone-commands:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_zone_commands.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-zone-commands
+	build/tests/test-zone-commands

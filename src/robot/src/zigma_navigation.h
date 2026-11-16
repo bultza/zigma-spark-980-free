@@ -20,7 +20,7 @@ static bool nav_int(const char *s,int lo,int hi,int *out){char *end;errno=0;long
 static cJSON *nav_status(void){return nav_read(nav_path("ZIGMA_STATUS_FILE","/tmp/zigma-free/observation/status.json"));}
 static bool nav_recent(double stamp){double age=(double)time(NULL)-stamp;return isfinite(stamp)&&age>=0&&age<=15;}
 static bool nav_link(cJSON *s){return nav_recent(nn(s,"cache_read_at"))&&nav_recent(nn(s,"local_link_received_at"));}
-static bool nav_idle(cJSON *s){const char *w=ns(s,"working_status");return !strcmp(w,"Standby")||!strcmp(w,"Pause")||!strcmp(w,"CleanDone")||!strcmp(w,"PileCharging")||!strcmp(w,"DirCharging");}
+static bool nav_idle(cJSON *s){const char *w=ns(s,"working_status");return !strcmp(w,"Standby")||!strcmp(w,"Hibernating")||!strcmp(w,"Pause")||!strcmp(w,"CleanDone")||!strcmp(w,"PileCharging")||!strcmp(w,"DirCharging");}
 static int nav_json(long type,const char *json){
  struct {long type;char text[4096];} m={type,{0}};snprintf(m.text,sizeof m.text,"%s",json);key_t key=ftok("/",1);int q=key==(key_t)-1?-1:msgget(key,0);
  if(q<0||msgsnd(q,&m,sizeof m.text,IPC_NOWAIT)){perror("Command not dispatched");return 1;}return 0;
