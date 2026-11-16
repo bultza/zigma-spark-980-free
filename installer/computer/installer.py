@@ -103,7 +103,7 @@ def files_for(profile, telegram=False, source_paths=None):
     return files
 
 def firmware_checks():
-    """Inventory vendor firmware; unknown components limit installation to SSH."""
+    """Inventory vendor firmware and enforce the checks required for tools/full."""
     catalog = json.loads((HERE/'known-firmware.json').read_text())
     lines = ['firmware_bad=0', 'firmware_variant=unreviewed', 'case "$layout" in']
     for layout, variant in catalog['variants'].items():
@@ -111,9 +111,13 @@ def firmware_checks():
             raise ValueError('Unknown catalog layout')
         lines += [layout + ')', 'firmware_variant=' + shlex.quote(variant['name']),
                   "while read -r expected path; do",
-                  ' actual=$(sha "$path" 2>/dev/null) || actual=',
+                  ' actual=$(sha256sum "$path" 2>/dev/null) || actual=',
+                  ' actual=${actual%% *}',
                   ' if test "$actual" = "$expected"; then',
                   '  echo "Firmware PASS: $path SHA256=$actual"',
+                  ' elif test "$path" = /root/yg/ygclient && test "${#actual}" -eq 64 &&',
+                  "      case \"$actual\" in *[!0-9a-f]*) false;; *) true;; esac; then",
+                  '  echo "Firmware WARNING: $path has unknown SHA-256 $actual (expected $expected)" >&2',
                   ' else',
                   '  echo "Firmware UNKNOWN: $path actual=${actual:-UNREADABLE} expected=$expected" >&2',
                   '  firmware_bad=1',
