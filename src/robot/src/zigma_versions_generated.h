@@ -2,7 +2,7 @@
 static const struct {const char *name,*version;} zigma_versions[]={
  {"free-zigma-agent-arm","V1.22"},
  {"zigma-core-arm","V1.2"},
- {"zigma-observe-arm","V1.8"},
+ {"zigma-observe-arm","V1.9"},
  {"zigma-network-arm","V1.5"},
  {"zigma-area-arm","V1.1"},
  {"zigma-zones-arm","V1.1"},
@@ -12,7 +12,7 @@ static const struct {const char *name,*version;} zigma_versions[]={
  {"zigmactl","V1.6"},
  {"zigma-mode","V1.1"},
  {"zigma-mode-backend","V1.2"},
- {"zigma-free-service","V1.3"},
+ {"zigma-free-service","V1.4"},
  {"zigma-cron","V1.1"},
  {"zigma-settings","V1.2"},
  {"zigma-time-sync","V1.1"},

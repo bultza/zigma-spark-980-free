@@ -7,6 +7,11 @@ static bool laser_have=false,laser_was_active=false;
 static long long laser_changed=0,laser_attempt=0,laser_next_sample=0;
 static unsigned laser_sequence=0;
 static cJSON *laser_pose=NULL;
+/* Hash recognition does not establish compatibility with the guarded memory layout. */
+static bool laser_hash_allowed(const char *hex){
+ return !strcmp(hex,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255")||
+        !strcmp(hex,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8");
+}
 static bool laser_hash(pid_t pid){
  char p[64],hex[65];snprintf(p,sizeof p,"/proc/%ld/exe",(long)pid);
  int fd=open(p,O_RDONLY|O_CLOEXEC);if(fd<0)return false;
@@ -17,7 +22,7 @@ static bool laser_hash(pid_t pid){
  mbedtls_sha256_free(&c);close(fd);
  if(rc)return false;
  for(int i=0;i<32;i++)snprintf(hex+i*2,3,"%02x",hash[i]);
- return !strcmp(hex,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255");
+ return laser_hash_allowed(hex);
 }
 static bool laser_guard(int fd){uint32_t p=0,v=0;return memory_read(fd,0x444594,&p,4)&&p==0x45a200&&memory_read(fd,p,&v,4)&&v==0x43b4f4;}
 static bool laser_copy(int fd,float *a){
