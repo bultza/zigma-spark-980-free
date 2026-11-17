@@ -157,11 +157,13 @@ case "$action" in
   fi
  ;;
  prepare-local)
+  . "$base/firmware-profile.sh"
+  [ -x "$firmware_wifi_bin/wpa_supplicant" ] && [ -x "$firmware_wifi_bin/wpa_cli" ] || exit 1
   [ -f "$marker" ] && [ ! -L "$marker" ]
   # Validate all targets before terminating any of them.
   single daemon /root/app_server/daemon
   single ygclient /root/yg/ygclient
-  single wpa_supplicant /root/bin/wpa_supplicant
+  single wpa_supplicant "$firmware_wifi_bin/wpa_supplicant"
   single udhcpc /bin/busybox
   if [ -n "$(pidof ygclient daemon || true)" ];then
    [ -n "$(pidof wifi_app_server_grit || true)" ]
@@ -172,7 +174,7 @@ case "$action" in
   stop_named daemon /root/app_server/daemon
   stop_named ygclient /root/yg/ygclient
   stop_named udhcpc /bin/busybox
-  stop_named wpa_supplicant /root/bin/wpa_supplicant
+  stop_named wpa_supplicant "$firmware_wifi_bin/wpa_supplicant"
   start_trial_observer
   ;;
  recover)

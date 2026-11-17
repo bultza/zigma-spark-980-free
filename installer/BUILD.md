@@ -33,6 +33,20 @@ Source paths are relative to [robot/](robot/). Entries in `bundle.tar.gz` are re
 | `src/zigma-cron`, `src/zigma-free-service`, `src/zigma-mode`, `src/zigma-mode-backend`, `src/zigma-settings` | `bundle.tar.gz` → `stack/` with the same filenames | `/root/zigma-free/` | Scheduling, service supervision, mode switching, and settings. |
 | `src/zigma-time-sync` | `bundle.tar.gz` → `support/zigma-time-sync` | `/root/bin/zigma-time-sync` | Synchronises the robot's clock. |
 
+## Firmware profiles
+
+The flash layout determines how the installer mounts and stages the stack. The firmware profile is selected independently by the layout and the SHA-256 hashes of the kernel and rootfs. The catalog contains two direct profiles (kernel #20 and #16) and an overlay profile (kernel #23). A known base still has to pass the corresponding profile's component checks. An unrecognized base or a failed required check limits the installer to compatible persistent SSH.
+
+The `ciccio-original-kernel20` base also accepts two explicitly catalogued native pairs: the complete Puron app-server/navigation pair, and the Puron app-server with original navigation. These permit Tools and Full after every other required firmware check passes. The exceptions are scoped to that base; other base profiles retain their existing checks. Unknown or unreadable pairs still fall back to SSH-only. The complete Puron pair prints its known live LiDAR reading limitation, which does not block installation. No vendor executable is replaced by accepting its hash.
+
+Run the generated-shell firmware checks offline with:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s installer/tests -p test_firmware_checks.py -v
+```
+
+Each profile supplies the Wi-Fi executable directory and library search path. The installer records the selected profile in `installer-firmware` in the staged stack. The mode coordinator and its backend use the same record to run the network service and identify the vendor supplicant. Legacy installations without the record retain the original paths.
+
 ## Compiling and packaging
 
 See [src/README.md](../src/README.md) for the toolchain, per-component build commands, and Telegram transport build. Run `python3 src/package-release.py --label dev` from the repository root after building both sets of binaries.

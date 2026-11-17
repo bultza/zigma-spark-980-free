@@ -34,6 +34,7 @@ case "$map_once:$supervise" in 0:0|0:1|1:0|1:1) :;;*) exit 2;;esac
 [ ! -L "$runtime" ] || exit 1
 mkdir -p "$runtime";chmod 700 "$runtime"
 backend=$base/zigma-mode-backend
+. "$base/firmware-profile.sh"
 selected() { [ -f "$marker" ] && [ ! -L "$marker" ]; }
 absent() { [ ! -e "$marker" ] && [ ! -L "$marker" ]; }
 start() { awk '{print $22}' "/proc/$1/stat" 2>/dev/null; }
@@ -62,7 +63,9 @@ start_core() {
  core_pid=$!;identity_save "$runtime/core.identity" "$core_pid" || true
 }
 start_network() {
- "$base/zigma-network-arm" --run >"$runtime/network.log" 2>&1 </dev/null 9>&- &
+ LD_LIBRARY_PATH="$firmware_wifi_libs" "$base/zigma-network-arm" --run \
+  --wpa "$firmware_wifi_bin/wpa_supplicant" --wpa-cli "$firmware_wifi_bin/wpa_cli" \
+  --hostapd "$firmware_wifi_bin/hostapd" >"$runtime/network.log" 2>&1 </dev/null 9>&- &
  network_pid=$!;identity_save "$runtime/network.identity" "$network_pid" || true
 }
 child_ok() {

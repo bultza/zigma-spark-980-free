@@ -59,6 +59,7 @@ def files_for(profile, telegram=False, source_paths=None):
             add('stack/'+name, ROBOT/'build'/name)
         for name in ('zigma-mode','zigma-mode-backend','zigma-free-service','zigma-cron','zigma-settings'):
             add('stack/'+name, ROBOT/'src'/name)
+        add('stack/firmware-profile.sh', ROBOT/'src/firmware-profile.sh',0o644)
         for name in ('index.html','app.js','style.css','nor.js','favicon.svg'):
             add('stack/src/'+name,HERE.parent/'web/src'/name,0o644)
         add('stack/licenses/cJSON.txt',ROBOT/'vendor/cjson/LICENSE',0o644)
@@ -102,35 +103,119 @@ def files_for(profile, telegram=False, source_paths=None):
         files['stack/release.json']=((json.dumps({'items':records},indent=2)+'\n').encode(),0o600)
     return files
 
-def firmware_checks():
-    """Inventory vendor firmware and enforce the checks required for tools/full."""
-    catalog = json.loads((HERE/'known-firmware.json').read_text())
-    lines = ['firmware_bad=0', 'firmware_variant=unreviewed', 'case "$layout" in']
-    for layout, variant in catalog['variants'].items():
-        if layout not in ('direct', 'overlay'):
-            raise ValueError('Unknown catalog layout')
-        lines += [layout + ')', 'firmware_variant=' + shlex.quote(variant['name']),
-                  "while read -r expected path; do",
-                  ' actual=$(sha256sum "$path" 2>/dev/null) || actual=',
-                  ' actual=${actual%% *}',
-                  ' if test "$actual" = "$expected"; then',
-                  '  echo "Firmware PASS: $path SHA256=$actual"',
-                  ' elif test "$path" = /root/yg/ygclient && test "${#actual}" -eq 64 &&',
-                  "      case \"$actual\" in *[!0-9a-f]*) false;; *) true;; esac; then",
-                  '  echo "Firmware WARNING: $path has unknown SHA-256 $actual (expected $expected)" >&2',
-                  ' else',
-                  '  echo "Firmware UNKNOWN: $path actual=${actual:-UNREADABLE} expected=$expected" >&2',
-                  '  firmware_bad=1',
-                  ' fi',
-                  "done <<'ZIGMA_REVIEWED_FIRMWARE'"]
-        for path, digest in variant['files'].items():
-            if not re.fullmatch(r'/[A-Za-z0-9_./-]+', path) or not re.fullmatch(r'[a-f0-9]{64}', digest):
+def firmware_checks(catalog=None):
+    """Detect a firmware profile independently of its flash layout."""
+    if catalog is None:
+        catalog = json.loads((HERE/'known-firmware.json').read_text())
+    if catalog['schema'] != 2:
+        raise ValueError('Unknown firmware catalog schema')
+    path_pattern = r'/[A-Za-z0-9_./-]+'
+    lines = ["""firmware_bad=0
+firmware_variant=unreviewed
+firmware_digest() {
+ value=$(sha256sum "$1" 2>/dev/null) || return 1
+ printf '%s' "${value%% *}"
+}
+verify_firmware_files() {
+ while read -r expected path; do
+  case "$path" in
+   /dev/mtd2) actual=$kernel_sha;;
+   /dev/mtd3) actual=$rootfs_sha;;
+   *) actual=$(firmware_digest "$path") || actual=;;
+  esac
+  if test "$actual" = "$expected"; then
+   echo "Firmware PASS: $path SHA256=$actual"
+  elif test "$path" = /root/yg/ygclient && test "${#actual}" -eq 64 &&
+       case "$actual" in *[!0-9a-f]*) false;; *) true;; esac; then
+   echo "Firmware WARNING: $path has unknown SHA-256 $actual (expected $expected)" >&2
+  else
+   echo "Firmware UNKNOWN: $path actual=${actual:-UNREADABLE} expected=$expected" >&2
+   firmware_bad=1
+  fi
+ done
+}
+if test "$layout" != unknown; then
+ kernel_sha=$(firmware_digest /dev/mtd2) || kernel_sha=
+ rootfs_sha=$(firmware_digest /dev/mtd3) || rootfs_sha=
+fi
+case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
+    selectors = set()
+    for name, variant in catalog['variants'].items():
+        layout = variant['layout']
+        files = variant['files']
+        for path, digest in files.items():
+            if not re.fullmatch(path_pattern, path) or not re.fullmatch(r'[a-f0-9]{64}', digest):
                 raise ValueError('Invalid firmware catalog entry')
-            lines.append(digest + ' ' + path)
-        lines += ['ZIGMA_REVIEWED_FIRMWARE', ';;']
-    lines += ['*) firmware_bad=1; echo "Firmware layout unreviewed; SSH access will be evaluated separately";;', 'esac',
-              'if test "$firmware_bad" = 0; then echo "Firmware recognized: $firmware_variant"; else echo "Unreviewed firmware: tools/full blocked, compatible persistent SSH remains allowed"; fi',
-              'if test "$firmware_bad" != 0 && test "$profile" != ssh; then profile=ssh; echo "Requested $requested_profile; installing SSH ONLY for investigation"; fi']
+        wifi_bin = variant['wifi_bin']
+        wifi_libs = variant['wifi_libs']
+        if (layout not in ('direct', 'overlay') or not re.fullmatch(r'[A-Za-z0-9_-]+', name)
+                or not re.fullmatch(path_pattern, wifi_bin)
+                or not all(re.fullmatch(path_pattern, path) for path in wifi_libs.split(':'))
+                or wifi_bin + '/wpa_supplicant' not in files):
+            raise ValueError('Invalid firmware profile')
+        selector = f"{layout}:{files['/dev/mtd2']}:{files['/dev/mtd3']}"
+        if selector in selectors:
+            raise ValueError('Duplicate firmware profile selector')
+        selectors.add(selector)
+        lines += [selector + ')', ' firmware_variant=' + shlex.quote(name),
+                  ' firmware_wifi_bin=' + shlex.quote(wifi_bin),
+                  ' firmware_wifi_libs=' + shlex.quote(wifi_libs),
+                  " verify_firmware_files <<'ZIGMA_REVIEWED_FIRMWARE'"]
+        native_paths = ('/root/app_server/wifi_app_server_grit', '/root/hoslam/demo_rplidar')
+        pairs = variant.get('native_pairs', [])
+        if not isinstance(pairs, list):
+            raise ValueError('Invalid native firmware pairs')
+        # Native exceptions apply only inside this exact base-profile branch.
+        # Match complete pairs, never independent per-file allowlists.
+        lines.extend(f'{digest} {path}' for path, digest in files.items()
+                     if not pairs or path not in native_paths)
+        lines += ['ZIGMA_REVIEWED_FIRMWARE']
+        if pairs:
+            original = ':'.join(files[path] for path in native_paths)
+            seen = {original}
+            names = {'original'}
+            lines += [' native_app_sha=$(firmware_digest ' + native_paths[0] + ') || native_app_sha=',
+                      ' native_nav_sha=$(firmware_digest ' + native_paths[1] + ') || native_nav_sha=',
+                      ' case "$native_app_sha:$native_nav_sha" in',
+                      ' ' + original + ')', '  firmware_native_variant=original', '  ;;']
+            for pair in pairs:
+                pair_files = pair['files']
+                pair_name = pair['name']
+                note = pair['note']
+                if (not re.fullmatch(r'[A-Za-z0-9_-]+', pair_name)
+                        or set(pair_files) != set(native_paths)
+                        or not all(isinstance(value, str) and re.fullmatch(r'[a-f0-9]{64}', value)
+                                   for value in pair_files.values())
+                        or not isinstance(note, str) or not note
+                        or any(ord(char) < 32 for char in note)):
+                    raise ValueError('Invalid native firmware pair')
+                selector = ':'.join(pair_files[path] for path in native_paths)
+                if selector in seen or pair_name in names:
+                    raise ValueError('Duplicate native firmware pair')
+                seen.add(selector)
+                names.add(pair_name)
+                lines += [' ' + selector + ')',
+                          '  firmware_native_variant=' + shlex.quote(pair_name),
+                          '  echo ' + shlex.quote('Firmware NOTE: ' + note), '  ;;']
+            lines += [' *)', '  firmware_bad=1', '  firmware_native_variant=unreviewed',
+                      '  echo "Native firmware UNKNOWN: app-server=${native_app_sha:-UNREADABLE} navigation=${native_nav_sha:-UNREADABLE}" >&2',
+                      '  ;;', ' esac',
+                      ' echo "Native firmware: $firmware_native_variant"']
+        lines += [' ;;']
+    lines += ["""*)
+ firmware_bad=1
+ echo "Firmware base unreviewed: layout=$layout kernel=${kernel_sha:-UNREADABLE} rootfs=${rootfs_sha:-UNREADABLE}" >&2
+ ;;
+esac
+if test "$firmware_bad" = 0; then
+ echo "Firmware recognized: $firmware_variant"
+else
+ echo "Unreviewed firmware: tools/full blocked, compatible persistent SSH remains allowed"
+ if test "$profile" != ssh; then
+  profile=ssh
+  echo "Requested $requested_profile; installing SSH ONLY for investigation"
+ fi
+fi"""]
     return '\n'.join(lines)
 
 

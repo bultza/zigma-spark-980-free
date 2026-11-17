@@ -75,7 +75,7 @@ elif test "$layout" = direct;then
 fi
 already=0
 if test "$profile" = full;then
- for command in /usr/bin/ntpdate /usr/bin/crontab /usr/sbin/crond; do
+ for command in "$firmware_wifi_bin/wpa_supplicant" "$firmware_wifi_bin/wpa_cli" /usr/bin/ntpdate /usr/bin/crontab /usr/sbin/crond; do
   test -x "$command" || fail "Missing full-profile dependency: $command"
  done
  for dir in /root/etc/crontabs; do safe_dir "$dir"; done
@@ -223,6 +223,7 @@ if test "$profile" = full && test "$already" = 0;then
  printf 'robot_name=%s\n' "$robot_name" >"$store/device.conf"
  printf '%s\n' "$bundle_sha" >"$store/installer-bundle.sha256"
  printf '%s\n' "$layout" >"$store/installer-layout"
+ printf '%s %s %s\n' "$firmware_variant" "$firmware_wifi_bin" "$firmware_wifi_libs" >"$store/installer-firmware"
  if test "$layout" = overlay;then
   replace "$stage/payload/init/S02zigma-storage" /root/etc/init.d/S02zigma-storage 700
   /root/etc/init.d/S02zigma-storage start

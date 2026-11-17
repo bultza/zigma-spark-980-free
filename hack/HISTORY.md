@@ -101,6 +101,8 @@ Each cell gives the start offset and size within the 32 MiB SPI NOR.
 | JFFS2 data | `0xA10000` · 21.9375 MiB | `0xB60000` · 4.625 MiB | `0xA10000` · 21.9375 MiB |
 | Separate firmware partition | — | `0x1000000` · 16 MiB | — |
 
+[Compare the firmware variants](FIRMWARE_VARIANTS.md) for kernel builds, vendor binaries and compatibility findings.
+
 On Ciccio and Caccamora, the data partition is mounted at `/root`. Ciccia uses its data partition as an overlay and has a separate firmware partition. The different offsets matter when deciding which part of a dump to extract or write back.
 
 ## We found two ways in without rewriting the flash directly
