@@ -39,13 +39,13 @@ Issues 01a and 03 contain the same pair of Puron binaries across two different b
 
 Those rows describe the earlier trials. On 17 November the owner clarified that Puron navigation works and the remaining navigation limitation is reading live LiDAR. The owner explicitly requested Full installation for the complete Puron pair on the Ciccio/Caccamora base. This owner report supersedes using the earlier Caccamora trial as a reason to block that installation.
 
-The Puron app-server adapters were subsequently updated for settings, status, cleaning statistics and zone display. Go-to from Hibernating was confirmed by the owner. Zone edit/delete was verified with original navigation and the Puron app-server. The zone command adapter currently requires original navigation for that combination; editing with Puron navigation is not validated by those tests.
+The Puron app-server adapters were subsequently updated for settings, status, cleaning statistics and zone display. Go-to from Hibernating was confirmed by the owner. Zone edit/delete was verified with original navigation and the Puron app-server. Zone helper V1.3 also enables the exact Puron navigation hash for user validation, at the owner's request. The existing edit/delete test establishes the original-navigation/Puron-app-server result; operation with both Puron binaries awaits user hardware feedback.
 
 ## Installer checks
 
 The [firmware catalogue](../installer/computer/known-firmware.json) supplies the reviewed hashes and Wi-Fi paths. The installer selects a profile using the layout, kernel and SquashFS hashes, then checks the other listed files.
 
-- **Issue 01a** selects `ciccia-original-kernel23`. The flash comparison found two file mismatches, both in the Puron binaries. Those mismatches trigger the installer’s SSH-only fallback for Tools or Full.
+- **Issue 01a** selects `ciccia-original-kernel23`. Its base partitions and `ygclient` match Ciccia, while its navigation/app-server pair matches Puron from issue 03. The complete Puron pair is now explicitly catalogued on this overlay base, permitting Tools and Full after all other required checks pass. Full retains the existing firmware-partition storage and bind mounts; the live LiDAR limitation is reported without downgrading installation.
 - **Issue 01b** matches the base for `direct-kernel16`. The profile includes its Wi-Fi paths. Full installation and rollback on that hardware remain to be verified.
 - **Issue 03** shares the base for `ciccio-original-kernel20`. Its exact Puron app-server/navigation pair now permits Tools and Full. The tested Puron app-server/original-navigation pair is also accepted on this base. A different readable `ygclient` hash still produces a warning under the existing policy.
 

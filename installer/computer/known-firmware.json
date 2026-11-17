@@ -66,7 +66,17 @@
         "/root/bin/hold380": "8a5a2538c5b21b6916867b2ea4173d45b2a1d9fafbcc16e1f66eb37f7f536e58",
         "/root/etc/init.d/S70yg": "4763d5eb69652f338f6abf29e92da90753893819b339ea3bf48414a864ea800d",
         "/root/etc/init.d/S99daemon": "8996c8426d0c86b6ac0868a5bc037419bf612914961619fcc83b57788cd38841"
-      }
+      },
+      "native_pairs": [
+        {
+          "name": "puron",
+          "files": {
+            "/root/app_server/wifi_app_server_grit": "784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912",
+            "/root/hoslam/demo_rplidar": "6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8"
+          },
+          "note": "Full installation supported on this base. Live LiDAR reading for Puron navigation is not yet supported."
+        }
+      ]
     },
     "direct-kernel16": {
       "layout": "direct",

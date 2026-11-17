@@ -45,7 +45,7 @@ The version header is generated from `src/robot/versions.json`. The browser asse
 
 ## No-go zone adapter profiles
 
-`zigma-zones-arm` V1.2 verifies the executable identity and SHA-256 of the app-server queue receiver. The original `4cf07099…` profile retains its type 1 JSON command. The Puron `784fbcda…` profile requires the original `b10fc7b4…` navigation receiver and sends classified quadrilaterals directly on the navigation queue: type 6 applies the complete set; one type 16 request reads the resulting configuration back through the native app-server. Unknown identities are rejected. The Puron navigation build is not supported by this editing path.
+`zigma-zones-arm` V1.3 verifies the executable identity and SHA-256 of the app-server queue receiver. The original `4cf07099…` profile retains its type 1 JSON command. The Puron `784fbcda…` profile accepts either the original `b10fc7b4…` or the known Puron `6b7b1109…` navigation receiver and sends classified quadrilaterals directly on the navigation queue: type 6 applies the complete set; one type 16 request reads the resulting configuration back through the native app-server. Unknown identities are rejected. Editing with Puron navigation is enabled at the owner's request for user validation; the physical edit/delete test so far used original navigation with the Puron app-server.
 
 This avoids Puron's incompatible JSON parser and its truncated legacy zone-cache allocation. Coordinates, restrictions, backups, idle/error checks, unchanged-map checks and confirmation remain part of the existing web/API flow. No periodic map requests are enabled. `--dry-run` validates and prints the canonical input JSON without accessing IPC; it does not exercise a running firmware profile.
 

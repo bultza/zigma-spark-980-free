@@ -13,6 +13,7 @@ installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 CATALOG = json.loads((ROOT/'computer/known-firmware.json').read_text())
 BASE = 'ciccio-original-kernel20'
+OVERLAY = 'ciccia-original-kernel23'
 APP = '/root/app_server/wifi_app_server_grit'
 NAV = '/root/hoslam/demo_rplidar'
 
@@ -63,17 +64,39 @@ class FirmwareChecks(unittest.TestCase):
         self.assertIn('Native firmware: puron-app-original-navigation', output)
 
     def test_other_bases_do_not_inherit_puron_pair(self):
-        for name in ['ciccia-original-kernel23', 'direct-kernel16']:
+        for name in ['direct-kernel16']:
             result, _ = self.run_checks(name, pair='puron')
             self.assertTrue(result.startswith('RESULT:ssh:1:'))
 
+    def test_issue01a_overlay_full(self):
+        variant = CATALOG['variants'][OVERLAY]
+        self.assertEqual(variant['layout'], 'overlay')
+        self.assertEqual(variant['files']['/dev/mtd2'],
+                         '0e912343ba5e0ce27e302c3b98b0755540be6c503838d6bf8cca0633d2300d3c')
+        self.assertEqual(variant['files']['/dev/mtd3'],
+                         '84f570dfc1bcdf115e7e009025861a5c2b0a72be6d6315b28a1828e50fcc065f')
+        self.assertEqual(variant['native_pairs'][0]['files'], {
+            APP:'784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912',
+            NAV:'6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8'})
+        for requested in ['ssh', 'tools', 'full']:
+            with self.subTest(profile=requested):
+                result, output = self.run_checks(OVERLAY, pair='puron', requested=requested)
+                self.assertEqual(result, 'RESULT:' + requested + ':0:/root/bin:/root/lib:/lib:/usr/lib')
+                self.assertIn('Native firmware: puron', output)
+                self.assertIn('Firmware recognized: ciccia-original-kernel23', output)
+
+    def test_overlay_uncatalogued_mixed_pair(self):
+        result, _ = self.run_checks(OVERLAY, pair='puron-app-original-navigation')
+        self.assertTrue(result.startswith('RESULT:ssh:1:'))
+
     def test_bad_or_unreadable_native_files(self):
-        for path in [APP, NAV]:
-            for value in ['a'*64, None]:
-                with self.subTest(path=path, value=value):
-                    result, output = self.run_checks(pair='puron', changed={path:value})
-                    self.assertTrue(result.startswith('RESULT:ssh:1:'))
-                    self.assertIn('Native firmware UNKNOWN', output)
+        for name in [BASE, OVERLAY]:
+            for path in [APP, NAV]:
+                for value in ['a'*64, None]:
+                    with self.subTest(base=name, path=path, value=value):
+                        result, output = self.run_checks(name, pair='puron', changed={path:value})
+                        self.assertTrue(result.startswith('RESULT:ssh:1:'))
+                        self.assertIn('Native firmware UNKNOWN', output)
 
     def test_no_independent_hash_allowlists(self):
         puron = next(p['files'] for p in CATALOG['variants'][BASE]['native_pairs'] if p['name']=='puron')
@@ -81,12 +104,13 @@ class FirmwareChecks(unittest.TestCase):
         self.assertTrue(result.startswith('RESULT:ssh:1:'))
 
     def test_required_components_still_checked(self):
-        for path in CATALOG['variants'][BASE]['files']:
-            if path in [APP, NAV, '/root/yg/ygclient']:
-                continue
-            with self.subTest(path=path):
-                result, _ = self.run_checks(pair='puron', changed={path:'a'*64})
-                self.assertTrue(result.startswith('RESULT:ssh:1:'))
+        for name in [BASE, OVERLAY]:
+            for path in CATALOG['variants'][name]['files']:
+                if path in [APP, NAV, '/root/yg/ygclient']:
+                    continue
+                with self.subTest(base=name, path=path):
+                    result, _ = self.run_checks(name, pair='puron', changed={path:'a'*64})
+                    self.assertTrue(result.startswith('RESULT:ssh:1:'))
 
     def test_ygclient_warning_policy_unchanged(self):
         result, output = self.run_checks(pair='puron', changed={'/root/yg/ygclient':'a'*64})

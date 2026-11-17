@@ -32,5 +32,9 @@ int main(void){
  assert(zones_profile_hash("784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912")==2);
  assert(zones_profile_hash("4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a")==1);
  assert(!zones_profile_hash("unknown"));
+ assert(zones_navigation_hash("b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255"));
+ assert(zones_navigation_hash("6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8"));
+ assert(!zones_navigation_hash("6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d9"));
+ assert(!zones_navigation_hash("unknown"));
  puts("Zone native edit/delete/empty framing, signed grid coordinates, restrictions and exact profile selection: PASS");return 0;
 }

@@ -5,7 +5,7 @@ static const struct {const char *name,*version;} zigma_versions[]={
  {"zigma-observe-arm","V1.13"},
  {"zigma-network-arm","V1.5"},
  {"zigma-area-arm","V1.1"},
- {"zigma-zones-arm","V1.2"},
+ {"zigma-zones-arm","V1.3"},
  {"zigma-maps-arm","V1.4"},
  {"zigma-options-arm","V1.1"},
  {"zigma-curl-arm","V1.1"},

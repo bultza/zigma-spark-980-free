@@ -18,6 +18,11 @@ static int zones_profile_hash(const char *hash){
  if(!strcmp(hash,"4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a"))return 1;
  return 0;
 }
+/* Exact known navigation images; Puron enabled for user validation. */
+static bool zones_navigation_hash(const char *hash){
+ return !strcmp(hash,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255")||
+        !strcmp(hash,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8");
+}
 static bool zones_receiver_hash(int q,const char *expected,char hash[65]){
  struct msqid_ds info;if(msgctl(q,IPC_STAT,&info)||!zigma_native_process(info.msg_lrpid,expected))return false;
  char path[64];snprintf(path,sizeof path,"/proc/%d/exe",info.msg_lrpid);
@@ -32,9 +37,9 @@ static bool zones_receiver_hash(int q,const char *expected,char hash[65]){
  return true;
 }
 /* Puron lacks forbidden_zone_info and its legacy parser truncates the cache
- * allocation/copy to 4*(count+1). Use the unchanged original navigation's
- * classified-quads protocol instead. It converts grid floats to metres and
- * publishes the resulting configuration back to the app-server. No IPC reads. */
+ * allocation/copy to 4*(count+1). Use the classified-quads protocol directly.
+ * This route was verified with original navigation; the exact Puron image is
+ * also enabled at the owner's request, pending user hardware feedback. No IPC reads. */
 static void zones_native_message(cJSON *zones,unsigned char text[4096]){
  uint32_t count=(uint32_t)cJSON_GetArraySize(zones),size=8+36*count;
  memset(text,0,4096);memcpy(text,&size,4);memcpy(text+4,&count,4);
@@ -79,7 +84,7 @@ int main(int argc,char **argv){
  if(!profile){fprintf(stderr,"Unsupported app-server identity; zones not dispatched\n");cJSON_Delete(o);free(payload);return 1;}
  if(profile==2){
   key=ftok("/",14);q=key==(key_t)-1?-1:msgget(key,0);
-  if(q<0||!zones_receiver_hash(q,"/root/hoslam/demo_rplidar",hash)||strcmp(hash,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255")){
+  if(q<0||!zones_receiver_hash(q,"/root/hoslam/demo_rplidar",hash)||!zones_navigation_hash(hash)){
    fprintf(stderr,"Unsupported Puron navigation identity; zones not dispatched\n");cJSON_Delete(o);free(payload);return 1;
   }
  }
