@@ -127,10 +127,17 @@ static int reboot_robot(void)
     return 1;
 }
 
+#include "zigmactl_status.h"
+
 int main(int argc, char **argv)
 {
     if (zigma_version_only(argc, argv, "zigmactl")) return 0;
     if (argc==2 && !strcmp(argv[1], "check-control")) return check_control();
+    if(argc>=2&&!strcmp(argv[1],"status")){
+        if(argc==2)return ctl_status(false);
+        if(argc==3&&!strcmp(argv[2],"--json"))return ctl_status(true);
+        fprintf(stderr,"Usage: zigmactl status [--json]\n");return 2;
+    }
     int x,y,timeout=300;
     if(argc==2&&!strcmp(argv[1],"getvolume"))return nav_volume(false,0);
     if(argc==3&&!strcmp(argv[1],"setvolume")){
@@ -151,7 +158,7 @@ int main(int argc, char **argv)
     }
     if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[1], "clean") && strcmp(argv[1], "resume"))) {
         fprintf(stderr,
-                "Usage: %s {check-control|clean [1-3]|resume [1-3]|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
+                "Usage: %s {status [--json]|check-control|clean [1-3]|resume [1-3]|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
                 argv[0]);
         return 1;
     }
