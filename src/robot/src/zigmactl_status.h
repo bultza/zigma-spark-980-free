@@ -9,6 +9,7 @@
 #ifndef ZIGMACTL_STATUS_PATH
 #define ZIGMACTL_STATUS_PATH "/tmp/zigma-free/observation/status.json"
 #endif
+#include "zigmactl_status_extra.h"
 /* Read the observer snapshot only: no native IPC, HTTP, or credentials. */
 static int ctl_status(bool json) {
  char raw[65537]; size_t used=0; cJSON *in=NULL;
@@ -53,6 +54,8 @@ static int ctl_status(bool json) {
  cJSON_AddStringToObject(out,"telemetry_state",quality);
  cJSON_AddNumberToObject(out,"server_time",epoch);
  if(ts>0&&age>=0)cJSON_AddNumberToObject(out,"observation_age_s",floor(age));else cJSON_AddNullToObject(out,"observation_age_s");
+ cJSON *wifi=ctl_wifi(epoch),*position=ctl_position(in,epoch);
+ cJSON_AddItemToObject(out,"wifi",wifi);cJSON_AddItemToObject(out,"position",position);
  if(json){char *text=cJSON_PrintUnformatted(out);if(text){puts(text);free(text);}else{cJSON_Delete(in);cJSON_Delete(out);return 1;}}
  else{
   printf("State: %s\n",cJSON_GetObjectItemCaseSensitive(out,"working_status")->valuestring);
@@ -61,6 +64,15 @@ static int ctl_status(bool json) {
   printf("Error: %s\nTelemetry: %s\n",cJSON_GetObjectItemCaseSensitive(out,"error")->valuestring,quality);
   if(ts>0&&age>=0)printf("Last observation: %.0f seconds ago\n",floor(age));
   if(!fresh)puts("Values are not confirmed current.");
+  cJSON *duration=nv(out,"clean_time_s"),*area=nv(out,"clean_area_m2");
+  if(cJSON_IsNumber(duration))printf("Cleaning time: %.0f min %.0f s\n",floor(duration->valuedouble/60),fmod(duration->valuedouble,60));else puts("Cleaning time: unavailable");
+  if(cJSON_IsNumber(area))printf("Cleaned area: %.2f m2\n",area->valuedouble);else puts("Cleaned area: unavailable");
+  printf("Wi-Fi: %s",cJSON_IsTrue(nv(wifi,"connected"))?"connected":cJSON_IsFalse(nv(wifi,"connected"))?"disconnected":"unavailable");
+  if(cJSON_IsNumber(nv(wifi,"signal_dbm")))printf(" (%.0f dBm)",nn(wifi,"signal_dbm"));
+  if(cJSON_IsString(nv(wifi,"ipv4")))printf(" · %s",ns(wifi,"ipv4"));
+  puts("");
+  if(cJSON_IsTrue(nv(position,"available")))printf("Position (cached): x=%.2f, y=%.2f cells; heading=%.3f rad; map=%s; resolution=%.3f m/cell\n",nn(position,"x"),nn(position,"y"),nn(position,"heading"),ns(position,"map_id"),nn(position,"resolution_m"));
+  else puts("Position: unavailable (no recent validated map pose)");
  }
  cJSON_Delete(in);cJSON_Delete(out);return available?0:1;
 }
