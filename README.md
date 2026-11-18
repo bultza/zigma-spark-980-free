@@ -1,6 +1,6 @@
 # Zigma Free
 
-In August 2026, all Zigma Spark-980 robots lost its WiFi connectivity all over the world. During the investigation, we captured a command delivered through the cloud service that disables the Wi-Fi on the robot (an auto destruct command!). A similar loss of app control affected the Redmond RV-R670S in October, when we found expired TLS certificates on the service's HTTPS endpoints. [Skip to how we discovered access](#how-we-discovered-access) if you’re here for the hack.
+In August 2026, all Zigma Spark-980 robots lost its WiFi connectivity all over the world. During the investigation, we captured a command delivered through the cloud service that disables the Wi-Fi on the robot (an auto destruct command!). A similar loss of app control affected the Redmond RV-R670S in October, when we found expired TLS certificates on the service's HTTPS endpoints. [Skip to how we discovered access](hack/HISTORY.md) if you’re here for the hack.
 
 If you just want to install it on your Zigma (or Redmond or Puron) robots, go directly to the [Installation Manual](installer/README.md)
 
@@ -16,15 +16,19 @@ Daily cleaning schedules run on the robot's own clock, so they work even without
 
 ## Model compatibility
 
-Zigma Free was developed and tested on the **Zigma Spark-980**.
+The installer will be able to access and expose the SSH of your robots for these models, however the "Free-Zigma" app will depend on the status of the project.
+
+### Fully compatible models
+- **Zigma Spark-980** - Tested in three different software variants (in which partition tables or even the way of handling the memory is different).
+
+### Partially compatible models
+
+- **Puron PR10** - Currently under testing
 
 ### Potentially compatible models
 
-- **Redmond RV-R670S**
-- **Redmond RV-R650S**
-- **Puron PR10**
-
-We used the RV-R670S profile in the REDMOND Robot app to pair a Spark-980. All three models are listed as using the same replacement roller brush as the Spark-980. Zigma Free installation is unverified on these three models.
+- **Redmond RV-R670S** - I need beta testers so please try the installer and report with an issue!
+- **Redmond RV-R650S** - It has not lidar but it should be possible to at least get a SSH terminal.
 
 ## Features
 
@@ -39,7 +43,7 @@ The web interface and control software run on the robot itself. The original nav
 ![Animated demo of the Zigma Free web interface](images/video_usage.gif)
 
 ## Zigma Spark-980 hardware
-During the investigation we used 3 different robots, the three of them with different versions and in at least one, a totally different linux partition. This makes it particularly difficult because even if they use the same hardware, in some of the robots the internal storage has a permanent change applied that is not compatible with the kernel of other robots.
+During the investigation we used 3 different robots, the three of them with different versions and in at least one, a totally different linux partition (when the OS is different, I call them "variants"). This makes it particularly difficult because even if they use the same hardware, in some of the robots the internal NOR memory has a permanent flag applied that makes its linux kernel not compatible other robots.
 
 The robot has two main PCBs. The **AM580 main logic board** runs Linux, and the **AM380 chassis controller board** handles low-level chassis control.
 
@@ -55,7 +59,7 @@ The robot has two main PCBs. The **AM580 main logic board** runs Linux, and the 
 ## How to install
 
 > [!WARNING]
-> Installing Zigma Free can leave your robot unable to boot or operate. The risk appears low on supported Spark-980 firmware when you follow the guide, but a mistake or a power interruption at the wrong time can still brick the robot. Check your firmware, keep the robot powered during installation, and stop if the wizard cannot verify the flash backup. Proceed only if you are prepared to recover the robot.
+> Installing Zigma Free can leave your robot unable to boot or operate. The risk appears low on supported firmwares as long as you follow the guide, but a mistake or a power interruption at the wrong time can still brick the robot. Check your firmware, keep the robot powered during installation, and stop if the wizard cannot verify the flash backup. If the NOR backup fails, you can try again. It is strange to fail 3 times in a row but it can happen. Proceed only if you are prepared to recover the robot.
 
 On a Windows or Linux computer with Python 3.10 or later, download and extract the [latest release package](https://github.com/bultza/zigma-spark-980-free/releases). Then follow the detailed instructions from here: [Install Zigma Free](installer/README.md)
 
