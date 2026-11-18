@@ -249,11 +249,13 @@ static bool reset_waiting(void){cJSON *p=get(state,"map_reset_pending");const ch
 static bool update_map_reset(void);
 #include "zigma_command_feedback.h"
 #include "zigma_wifi.h"
+static const char *firmware_brand(void);
 static cJSON *status_json(void) {
  update_map_reset();
  demo_tick(); cJSON *o=NULL;
  if(status_file){char *s=read_file(status_file,65536);if(s){o=strict_json(s);free(s);}}
  if(!cJSON_IsObject(o)){cJSON_Delete(o);o=cJSON_CreateObject();}
+ setstr(o,"firmware_brand",!strcmp(mode,"demo")?"zigma":firmware_brand());
  cJSON_AddStringToObject(o,"mode",mode);cJSON_AddStringToObject(o,"robot",str(state,"robot_name",robot));cJSON_AddNumberToObject(o,"server_time",time(NULL));cJSON_AddStringToObject(o,"timezone",current_zone);cJSON_AddStringToObject(o,"area_unit",str(state,"area_unit","m2"));
  if(!strcmp(mode,"demo")){
   setstr(o,"working_status",activity);setnum(o,"battery_level",87);setstr(o,"error","NoError");setbool(o,"fresh",true);
@@ -752,6 +754,7 @@ static void rename_saved_map(int fd,cJSON *input){
  
 #include "zigma_sessions_api.h"
 #include "zigma_release.h"
+#include "zigma_brand.h"
 #include "zigma_laser_api.h"
 /* A streaming backup runs in a child; status and controls remain responsive. */
 static pid_t nor_pid=0;

@@ -138,6 +138,15 @@ function changePage(page) {
  window.scrollTo({top:0,behavior:'smooth'});
 }
 function showError(error) { toast(error.name==='AbortError'?'The connection is taking too long. No command was repeated.':error.message); }
+function appName(){return app.status?.firmware_brand==='puron'?'PURON-FREE':'Zigma Free';}
+function renderBrand(){
+ const puron=app.status?.firmware_brand==='puron',name=appName();
+ $('brand-name').textContent=puron?'PURON':'Zigma';
+ document.querySelector('.brand').setAttribute('aria-label',`${name}, home`);
+ document.querySelectorAll('[data-app-name]').forEach(el=>{el.textContent=name;});
+ document.querySelectorAll('.robot-wordmark').forEach(el=>{el.textContent=puron?'PURON':'ZIGMA';});
+ document.title=`${name} - ${app.status.robot}`;
+}
 function renderStatus() {
  const s=app.status;if(!s)return;
  if(s.map_reset_pending){if(app.activeArea){app.activeArea=null;saveArea();}app.selection=null;app.pendingZones=null;app.mapTag=null;app.map={available:false,reset_pending:true,warning:s.map_restore?'Master restoration pending. Waiting for native confirmation and a new map.':'Clear request recorded. Waiting for a new robot map.'};if(app.tool!=='pan')setTool('pan');}
@@ -150,7 +159,7 @@ function renderStatus() {
  if(app.pending&&s.server_time-app.pending.at>30){$('command-result').textContent='No confirming report yet. The command was not retried.';app.pending=null;}
  if(app.pending&&s.command_feedback?.action!==app.pending.action&&s.fresh&&s.observed_at>=app.pending.at&&expected[app.pending.action]?.includes(s.working_status)){$('command-result').textContent=`New robot report: ${(states[s.working_status]||[s.working_status])[0]}`;app.pending=null;}
  const entry=states[s.working_status] || [s.working_status,'State reported by the robot'];
- document.title=`Zigma Free - ${s.robot}`;
+ renderBrand();
  $('robot-name').textContent=s.robot;$('breadcrumb-name').textContent=s.robot;
  $('summary-state').textContent=s.fresh?entry[0]:'Stale data';$('robot-state-label').textContent=s.fresh?entry[0]:'';
  $('robot-state-detail').textContent=s.fresh?entry[1]:'State is old. Manual commands remain available while connected.';
@@ -249,7 +258,7 @@ async function loadSchedules() { const data=await api('/api/schedules');app.sche
 function scheduleActionLabel(job){return job.action==='random_song'?'Random song':job.action==='play_song'?`Play song · ${job.song}`:job.action==='custom_command'?`Custom command · ${job.command}`:job.action==='dock'?'Return to dock':job.action==='reboot'?'Reboot robot':job.action==='restore_master'?`Restore master · ${job.master_name||'Unavailable copy'}`:`Full clean · Fan ${job.fan_power??3}`;}
 function renderExternalCron(data){
  const list=$('external-cron-list');list.replaceChildren();
- $('external-cron-status').textContent=data.external_available?`${data.external_entries.length} entries outside Zigma Free · Read only${data.external_truncated?' · More entries are available in the raw table':''}`:(data.external_error||'Robot crontab is unavailable.');
+ $('external-cron-status').textContent=data.external_available?`${data.external_entries.length} entries outside ${appName()} · Read only${data.external_truncated?' · More entries are available in the raw table':''}`:(data.external_error||'Robot crontab is unavailable.');
  for(const entry of data.external_entries||[]){const card=document.createElement('article');card.className='external-cron-entry';const label=document.createElement('strong'),raw=document.createElement('pre');label.textContent=entry.label||'Custom command';raw.textContent=entry.raw;card.append(label,raw);list.append(card);}
  if(data.external_available&&!data.external_entries.length)list.textContent='No additional entries.';
 }
@@ -503,16 +512,18 @@ async function saveSetting(action,value,button){
   if(action==='ntp_sync'&&!s.simulated){for(let i=0;i<15;i++){await new Promise(resolve=>setTimeout(resolve,2000));const actual=await api('/api/settings');renderNtp(actual);if(['success','failed'].includes(actual.ntp_sync_status)){result.textContent=actual.ntp_sync_status==='success'?'Clock synchronized.':'Synchronization failed.';break;}}}
  }catch(error){result.textContent=error.message;result.classList.remove('hidden');}finally{button.disabled=false;}
 }
-// Each card submits its complete settings snapshot; checkboxes are drafts until Save.
+// Submit changed fields only; preserve existing names accepted by the installer.
+// Checkboxes remain drafts until Save.
 async function saveSettingsGroup(formId,resultId,values,afterSave){
  const form=$(formId),result=$(resultId),controls=[...form.querySelectorAll('input,select,button')],disabled=controls.map(c=>c.disabled);
  const completed=[];controls.forEach(c=>c.disabled=true);result.textContent='Saving…';
  try{
-  let latest;
-  for(const [action,value] of values){latest=await api('/api/settings',{method:'PUT',body:JSON.stringify({action,value})});completed.push(action);}
+  let latest=app.settings;
+  const changed=values.filter(([action,value])=>String(app.settings?.[action==='name'?'robot_name':action])!==String(value));
+  for(const [action,value] of changed){latest=await api('/api/settings',{method:'PUT',body:JSON.stringify({action,value})});completed.push(action);}
   if(afterSave)await afterSave();
   app.settings=latest;await refresh();
-  const options=values.filter(([key])=>['volume','over_ridge','continue_clean'].includes(key));
+  const options=changed.filter(([key])=>['volume','over_ridge','continue_clean'].includes(key));
   let confirmed=latest.simulated||!options.length;
   for(let i=0;!confirmed&&i<5;i++){await new Promise(resolve=>setTimeout(resolve,1300));const actual=await api('/api/settings');confirmed=options.every(([key,value])=>String(actual[key])===value);}
   result.textContent=confirmed?'Saved.':'Saved; robot options await confirmation.';
@@ -604,14 +615,14 @@ function mapCard(item,generation){
 }
 function mapButton(parent,label,primary=false){const button=document.createElement('button');button.type='button';button.className=primary?'primary-button small':'quiet-button';button.textContent=label;parent.append(button);return button;}
 function mapNameForm(card,item,save){
- const form=document.createElement('form');form.className='saved-map-name';form.innerHTML='<label class="field">Name in Zigma Free<input maxlength="48" required autocomplete="off"></label><button type="submit" class="quiet-button">Save name</button><p class="saved-name-result" role="status"></p>';
+ const form=document.createElement('form');form.className='saved-map-name';form.innerHTML=`<label class="field">Name in ${appName()}<input maxlength="48" required autocomplete="off"></label><button type="submit" class="quiet-button">Save name</button><p class="saved-name-result" role="status"></p>`;
  const input=form.querySelector('input');input.value=item.name||'';input.placeholder=`Map ${item.id}`;input.setAttribute('aria-label',`Name for ${item.uid?'master copy':'map'} ${item.name||item.id}`);
  form.addEventListener('submit',event=>{event.preventDefault();mapMutation(form.querySelector('button'),()=>save(input.value.trim()));});card.querySelector('.saved-map-actions').append(form);return input;
 }
 function renderRobotMap(item,catalog,list,generation){
  const card=mapCard(item,generation),actions=card.querySelector('.saved-map-actions'),badge=card.querySelector('.tiny-badge');
  if(item.id===(catalog.native_active_id||catalog.last_observed_active_id)){badge.classList.remove('hidden');badge.textContent=catalog.native_active_id?'ACTIVE · ROBOT CACHE':'LAST OBSERVED ACTIVE';}
- const input=mapNameForm(card,item,async name=>{await api('/api/maps/name',{method:'PUT',body:JSON.stringify({id:item.id,revision:item.revision,previous_name:item.name,name})});return 'Name saved in Zigma Free.';});
+ const input=mapNameForm(card,item,async name=>{await api('/api/maps/name',{method:'PUT',body:JSON.stringify({id:item.id,revision:item.revision,previous_name:item.name,name})});return `Name saved in ${appName()}.`;});
  const save=mapButton(actions,'Save master copy',true);save.disabled=!catalog.library_available;
  save.addEventListener('click',()=>mapMutation(save,async()=>{item.saveUid ||= newCopyId();await api('/api/map-library/save',{method:'POST',body:JSON.stringify({id:item.id,revision:item.revision,uid:item.saveUid,name:input.value.trim()||item.name||`Map ${item.id}`})});return 'Master copy saved separately on the robot. Cleaning will not overwrite it.';}));
  if(item.id===catalog.native_active_id){
