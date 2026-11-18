@@ -7,7 +7,7 @@ Use the installation wizard to set up Zigma Free on a Zigma Spark-980. The wizar
 - The robot needs a 2.4 GHz network and must be able to reach the computer. Allow inbound TCP port 8000 for Python on your home network.
 - Download the deployment archive from [GitHub Releases](https://github.com/bultza/zigma-spark-980-free/releases) and extract the entire archive.
 - Use a Windows 10/11 or Linux computer with Wi-Fi and Python 3.10 or later. On Linux, you also need NetworkManager (`nmcli`) and Python's `venv` and `pip`. On Debian or Ubuntu, install `python3-venv` if Python cannot create an environment or bootstrap pip.
-- If Windows blocks `start-windows.cmd`, right-click it, open **Properties → General**, and select **Unblock** under **Security** if that option appears.
+- If Windows blocks `install-from-windows.cmd`, right-click it, open **Properties → General**, and select **Unblock** under **Security** if that option appears.
 - Connect your computer to the Wi-Fi network the robot will use. We are going to emulate the Android app's pairing process, so the wizard needs your computer's IP address on that network before we start. The robot will connect to your Wi-Fi and download the installation files from your computer.
 - The wizard needs internet access on its first run to install Python dependencies. The robot does not need internet access to install Zigma Free. If your router lets you block internet access for the robot while keeping it reachable on your home network, you can do that before installation to avoid contact with the old cloud. The wizard redirects known vendor hostnames in the robot’s `/etc/hosts`. On a robot without SSH, this happens after its first connection to your home Wi-Fi. Direct IP connections are still possible.
 
@@ -15,7 +15,7 @@ Use the installation wizard to set up Zigma Free on a Zigma Spark-980. The wizar
 
 After extracting the deployment archive, open its top-level folder. The Windows and Linux launchers are there.
 
-1. On Windows, double-click `start-windows.cmd`. On Linux, open a terminal in the extracted folder and run `sh start-linux.sh`. Run the wizard as your regular user.
+1. On Windows, double-click `install-from-windows.cmd`. On Linux, open a terminal in the extracted folder and run `sh install-from-linux.sh`. Run the wizard as your regular user.
 2. Choose **New installation** if the wizard offers a choice.
 3. Give your robot a nice name.
 4. Enter the name of your Wi-Fi network, or press Enter to use the detected network. Enter its password when prompted. The password is visible while you type.
@@ -27,6 +27,34 @@ After extracting the deployment archive, open its top-level folder. The Windows 
 10. Wait for the local-mode checks to pass. If the wizard stops, see [Resume an interrupted installation](#resume-an-interrupted-installation).
 11. Copy the displayed web access token and press Enter to open the dashboard in your web browser.
 12. Sign in, then set a new password under **Settings → Web password**. Check that the dashboard connects and displays the robot's status.
+
+## Upgrade an existing installation
+
+Run `upgrade-from-windows.cmd` or `sh upgrade-from-linux.sh`. Choose a saved
+session (or enter its folder path), then confirm the robot's IP. The previous IP
+is shown as the default; changing it retains the saved SSH host identity.
+Choose **0** without a previous session and enter the IP and private key path.
+Encrypted keys prompt for their passphrase. Verify the displayed SSH fingerprint
+before trusting a host without a saved pin. An existing working SSH installation
+and accepted local mode are required. SSH-only sessions use the install launcher
+to finish installation first.
+
+Upgrade needs network access to SSH port 22 and the dashboard on 8765; Ethernet
+is fine. It needs neither pairing nor a download server. Keep the robot idle and
+powered throughout. The assistant checks firmware, saves and verifies copies of
+replaced files in a new private `~/Zigma/upgrade-*` session, and updates compiled
+components and web assets. It retains the original session, private key, maps,
+settings, tokens, boot scripts and factory firmware. This is a binary/web update,
+not a migration of boot scripts from older installations.
+
+Changed managed processes restart and the assistant checks their health and
+component hashes. If verification fails or the PC disconnects, the robot restores
+the previous files after a 240-second acceptance window. Do not power off during
+that window: the rollback worker and its working copies are in RAM. PC copies
+remain available for recovery after a power interruption. A failed rollback is
+reported separately; do not blindly repeat an upgrade. No automatic reboot occurs.
+The original installation bundle marker is retained; upgrade provenance is saved
+in the new upgrade session and the component inventory.
 
 ## SSH and session files
 

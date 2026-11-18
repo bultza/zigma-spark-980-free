@@ -6,7 +6,9 @@ For the installation steps, see [Install Zigma Free](README.md).
 
 | Script | What it does |
 | --- | --- |
-| `start-linux.sh`, `start-windows.cmd`, `run-windows.cmd` | Start the wizard and prepare its Python environment using `requirements-wizard.txt`. |
+| `install-from-linux.sh`, `install-from-windows.cmd`, `run-windows.cmd` | Start the wizard and prepare its Python environment using `requirements-wizard.txt`. |
+| `upgrade-from-linux.sh`, `upgrade-from-windows.cmd` | Start the SSH binary/web updater without pairing or Wi-Fi switching. |
+| `run-linux.sh`, `run-windows.cmd` | Prepare the shared Python environment. |
 | `wizard.py` | Checks the package and network, guides pairing, verifies SSH access, and runs the local-mode activation checks. |
 | `installer.py` | Builds the per-robot installation script and payload. It reads `known-firmware.json` to generate the firmware checks. |
 | `send_pairing.py` | Builds and sends the pairing request that tells the robot where to download the installer. |
@@ -35,9 +37,9 @@ Source paths are relative to [robot/](robot/). Entries in `bundle.tar.gz` are re
 
 ## Firmware profiles
 
-The flash layout determines how the installer mounts and stages the stack. The firmware profile is selected independently by the layout and the SHA-256 hashes of the kernel and rootfs. The catalog contains two direct profiles (kernel #20 and #16) and an overlay profile (kernel #23). A known base still has to pass the corresponding profile's component checks. An unrecognized base or a failed required check limits the installer to compatible persistent SSH.
+The flash layout determines how the installer mounts and stages the stack. The firmware profile is selected independently by the layout and the SHA-256 hashes of the kernel and rootfs. The catalog contains original direct profiles (kernels #20 and #16), an overlay profile (kernel #23), and separately identified Issue01b/Issue03 direct hybrids with Ciccia kernel #23. A known base still has to pass the corresponding profile's component checks. An unrecognized base or a failed required check limits the installer to compatible persistent SSH.
 
-The `ciccio-original-kernel20` base also accepts two explicitly catalogued native pairs: the complete Puron app-server/navigation pair, and the Puron app-server with original navigation. These permit Tools and Full after every other required firmware check passes. The `ciccia-original-kernel23` overlay base also accepts the complete Puron pair found in issue 01a. It retains the existing overlay storage path under `/root/firmware/arobot/zigma-free` and its bind-mount startup hook. The exceptions are scoped to these catalogued bases; the kernel #16 base retains its existing checks. Unknown or unreadable pairs still fall back to SSH-only. The complete Puron pair prints its known live LiDAR reading limitation, which does not block installation. No vendor executable is replaced by accepting its hash.
+The `ciccio-original-kernel20` base also accepts two explicitly catalogued native pairs: the complete Puron app-server/navigation pair, and the Puron app-server with original navigation. These permit Tools and Full after every other required firmware check passes. The `ciccia-original-kernel23` overlay base also accepts the complete Puron pair found in issue 01a. It retains the existing overlay storage path under `/root/firmware/arobot/zigma-free` and its bind-mount startup hook. The exceptions are scoped to these catalogued bases; the kernel #16 base retains its existing checks. Unknown or unreadable pairs still fall back to SSH-only. The packaged observer supports live LiDAR for the complete Puron pair. No vendor executable is replaced by accepting its hash.
 
 Run the generated-shell firmware checks offline with:
 
@@ -90,7 +92,7 @@ See [src/README.md](../src/README.md) for the toolchain, per-component build com
 
 The packager puts the ARM executables and transport assets in `robot/build/`, third-party notices in `robot/vendor/`, the version inventory in `robot/versions.json`, and web assets in `web/src/` inside the archive. It writes ZIP and TAR.GZ archives with SHA-256 sidecars. The wizard checks the internal `SHA256SUMS` before starting an installation.
 
-The deployment archive exposes `start-windows.cmd` and `start-linux.sh` at the top level. They delegate to the launchers under `computer/`.
+The deployment archive exposes `install-from-windows.cmd` and `install-from-linux.sh` at the top level. They delegate to the launchers under `computer/`.
 
 ### Early vendor hostname protection
 
@@ -196,3 +198,21 @@ flowchart LR
     Full --> Cleanup
     Trial --> Accepted["Pending trial marker becomes accepted"]
 ```
+
+### RC10 upgrade and Issue03 hybrid
+
+The four top-level launchers separate installation/resumption from SSH upgrade on
+Linux and Windows. `computer/upgrade.py` builds a strict binary/web allowlist from
+the same validated package inputs, preserves non-binary inventory rows, checks
+firmware against retained original init files, and sends the payload over pinned
+SSH. `upgrade-transaction.sh` serializes upgrades with the installer lock, verifies
+old/new hashes, replaces files atomically, restarts only managed processes, and
+rolls back if no successful acceptance arrives. No vendor image or private key is
+packaged. Offline transaction tests cover acceptance, rollback and preflight refusal.
+
+`ciccia-hybrid-03-kernel23` separately catalogs the direct five-partition Issue03
+userspace with Ciccia's DTB and kernel #23. Every required file hash was derived
+offline from the verified adapted image. It uses `/root/bin` and
+`/root/lib:/lib:/usr/lib`; the native pair is Puron. This profile is distinct from
+the Issue01b hybrid. Catalog acceptance is tested offline; installation and cold
+boot of RC10 on this hybrid still require a physical test.

@@ -8,7 +8,7 @@ if not errorlevel 1 goto use_launcher
 python -c "import sys; assert sys.version_info >= (3,10)" >nul 2>&1
 if not errorlevel 1 goto use_python
 echo [%date% %time%] Python 3.10+ is missing. Install it from https://www.python.org/downloads/windows/
-echo Enable the Python launcher or Add Python to PATH, then reopen start-windows.cmd.
+echo Enable the Python launcher or Add Python to PATH, then reopen install-from-windows.cmd.
 exit /b 1
 :use_launcher
 set "ZIGMA_PY=py -3"

@@ -49,3 +49,34 @@ def report(directory, command, out, error, code, timed_out, counts, phase=None):
         json.dump(record, f, indent=2)
         f.write('\n')
     return name, record
+
+
+def report_exception(exc, directory=None):
+    """Always show the exception type; retain stack locations without secrets/locals."""
+    from pathlib import Path
+    import sys
+    import traceback
+    kind = type(exc).__name__
+    detail = redact(str(exc)).strip()
+    if not detail:
+        detail = ('SSH connection closed unexpectedly before completing the operation.'
+                  if isinstance(exc, EOFError) else 'No additional error message was provided.')
+    message = kind + ': ' + detail
+    print('ERROR: ' + message, file=sys.stderr, flush=True)
+    try:
+        directory = Path(directory) if directory is not None else Path.home()/'Zigma'/'diagnostics'
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        now = datetime.datetime.now().astimezone()
+        name = directory/('error-'+now.strftime('%Y%m%d-%H%M%S-%f')+'.json')
+        frames = [{'file': frame.filename, 'line': frame.lineno, 'function': frame.name}
+                  for frame in traceback.extract_tb(exc.__traceback__)]
+        record = {'at': now.isoformat(), 'type': kind, 'message': detail, 'stack': frames}
+        with name.open('x', encoding='utf-8') as output:
+            name.chmod(0o600)
+            json.dump(record, output, indent=2)
+            output.write('\n')
+        print('[DIAGNOSTIC] Saved: '+str(name), file=sys.stderr, flush=True)
+        return name
+    except OSError as save_error:
+        print('[DIAGNOSTIC] Cannot save error report: '+type(save_error).__name__, file=sys.stderr, flush=True)
+        return None

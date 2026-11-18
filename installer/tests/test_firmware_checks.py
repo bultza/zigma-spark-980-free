@@ -71,13 +71,27 @@ class FirmwareChecks(unittest.TestCase):
         result, _ = self.run_checks(name, pair='puron')
         self.assertTrue(result.startswith('RESULT:ssh:1:'))
 
+    def test_issue03_hybrid_exact_components(self):
+        name = 'ciccia-hybrid-03-kernel23'
+        hybrid = CATALOG['variants'][name]
+        self.assertEqual(hybrid['layout'], 'direct')
+        self.assertEqual(hybrid['files']['/dev/mtd3'], CATALOG['variants'][BASE]['files']['/dev/mtd3'])
+        self.assertEqual(hybrid['files']['/dev/mtd2'], CATALOG['variants'][OVERLAY]['files']['/dev/mtd2'])
+        self.assertEqual(hybrid['files'][NAV], CATALOG['variants'][BASE]['native_pairs'][0]['files'][NAV])
+        self.assertTrue(self.run_checks(name)[0].startswith('RESULT:full:0:/root/bin:'))
+        for path in hybrid['files']:
+            if path == '/root/yg/ygclient':
+                continue
+            with self.subTest(path=path):
+                self.assertTrue(self.run_checks(name, changed={path: 'a'*64})[0].startswith('RESULT:ssh:1:'))
+
     def test_puron_pair_all_requested_profiles(self):
         for requested in ['ssh', 'tools', 'full']:
             with self.subTest(profile=requested):
                 result, output = self.run_checks(pair='puron', requested=requested)
                 self.assertTrue(result.startswith('RESULT:' + requested + ':0:'))
                 self.assertIn('Native firmware: puron\n', output)
-                self.assertIn('Live LiDAR reading for Puron navigation is not yet supported', output)
+                self.assertIn('Puron saved maps and live LiDAR are supported', output)
 
     def test_puron_app_with_original_navigation(self):
         result, output = self.run_checks(pair='puron-app-original-navigation')

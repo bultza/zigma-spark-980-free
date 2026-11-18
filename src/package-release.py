@@ -35,7 +35,9 @@ def stage_package(root):
             'console_output.py', 'hosts_guard.py', 'installer.py', 'known-firmware.json',
             'nor_backup.py', 'requirements-wizard.txt', 'run-windows.cmd',
             'send_pairing.py', 'session_recovery.py', 'ssh_output.py',
-            'start-linux.sh', 'start-windows.cmd', 'wizard.py',
+            'install-from-linux.sh', 'install-from-windows.cmd',
+            'upgrade-from-linux.sh', 'upgrade-from-windows.cmd', 'run-linux.sh',
+            'upgrade.py', 'upgrade-transaction.sh', 'wizard.py',
         ),
         'robot': (
             'activate.sh', 'configure-support.sh', 'install.sh.in', 'storage.sh',
@@ -95,14 +97,13 @@ def stage_package(root):
     )
     (root / 'BUILD.md').write_text(build_guide)
     copy(REPO / 'installer/README.md', 'README.md')
-    (root / 'start-windows.cmd').write_bytes(
-        b'@echo off\r\ncall "%~dp0computer\\start-windows.cmd" %*\r\n'
-    )
-    linux_launcher = root / 'start-linux.sh'
-    linux_launcher.write_text(
-        '#!/bin/sh\nexec sh "$(dirname "$0")/computer/start-linux.sh" "$@"\n'
-    )
-    linux_launcher.chmod(0o755)
+    for action in ('install', 'upgrade'):
+        name = action + '-from-windows.cmd'
+        (root / name).write_bytes(('@echo off\r\ncall "%~dp0computer\\' + name + '" %*\r\n').encode())
+        name = action + '-from-linux.sh'
+        launcher = root / name
+        launcher.write_text('#!/bin/sh\nexec sh "$(dirname "$0")/computer/' + name + '" "$@"\n')
+        launcher.chmod(0o755)
 
     # Validate the same files and versions the wizard uses to generate its payload.
     installer = runpy.run_path(str(root / 'computer/installer.py'))

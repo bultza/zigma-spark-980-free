@@ -336,7 +336,7 @@ class Robot:
         self.host, self.key, self.directory = host, key, directory
         self.host_key = None
 
-    def command(self, command, timeout=15, diagnostic=None):
+    def command(self, command, timeout=15, diagnostic=None, script=None):
         import paramiko
         robot = self
         started = time.monotonic()
@@ -357,7 +357,12 @@ class Robot:
             known.save(str(self.directory/'known_hosts'))
             trace(f'[SSH] Public-key authentication succeeded; known_hosts saved. Executing: {command}; timeout={timeout}s.')
             stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
-            stdin.close()
+            if script is not None:
+                stdin.write(script)
+                stdin.flush()
+                stdin.channel.shutdown_write()
+            else:
+                stdin.close()
             from ssh_output import collect, report, redact
             out, error, code, timed_out, counts = collect(stdout.channel, timeout)
             trace(f'[SSH] Command completed in {time.monotonic() - started:.2f}s; exit={code}; stdout={counts[0]} bytes; stderr={counts[1]} bytes; timeout={timed_out}.')
@@ -386,12 +391,16 @@ class Robot:
         try:
             result = self.command('test ! -e /root/.zigma-install/pending && cat /root/.zigma-install/transaction-*/session-result')
             lines = result.splitlines()
+            matches = []
             for index in range(0, len(lines) - 2, 3):
                 sha, requested, effective = lines[index:index+3]
                 if sha == bundle_sha and requested in ('ssh', 'tools', 'full') and effective in ('ssh', 'tools', 'full'):
-                    if effective == 'full' and not self.installed(bundle_sha):
-                        return False
-                    return effective
+                    matches.append(effective)
+            # A previous firmware fallback may share this bundle's hash.
+            # Inspect all records before deciding, and verify the installed marker.
+            if 'full' in matches:
+                return 'full' if self.installed(bundle_sha) else False
+            return matches[-1] if matches else False
         except (OSError, EOFError, RuntimeError, paramiko.SSHException):
             pass
         return False
@@ -540,6 +549,7 @@ def verify_release(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--upgrade', action='store_true', help='Upgrade an existing installation over SSH')
     parser.add_argument('--check', action='store_true', help='Check prerequisites/network/package only; no robot access')
     parser.add_argument('--session', type=Path, help='Continue this saved session without pairing (otherwise show saved sessions)')
     parser.add_argument('--port', type=int, default=8000)
@@ -550,8 +560,16 @@ def main():
         raise ValueError('Python 3.10 or newer is required.')
     trace(f'[START] Verbose installer; Python={sys.version.split()[0]}; platform={sys.platform}; executable={sys.executable}.')
     trace('[START] Every Python output line includes local date/time/timezone. Wi-Fi password is visible while typing and shown after pairing; the web token is shown before opening the browser. Private keys stay hidden.')
-    dependencies()
+    if not args.upgrade:
+        dependencies()
     verify_release(Path(__file__).resolve().parents[1])
+    if args.upgrade:
+        if args.check:
+            print('Upgrade package verified. No robot contacted.')
+        else:
+            from upgrade import upgrade
+            upgrade(args.session)
+        return
     choices = networks()
     if len(choices) != 1:
         raise ValueError('Start on your HOME Wi-Fi, not the robot pairing Wi-Fi (192.168.99.x). We need the computer HOME IP first so the robot knows where to download the files after joining your network. Connect to home Wi-Fi and restart; found ' + str(len(choices)) + ' usable home Wi-Fi addresses (exactly one is required).')
@@ -562,7 +580,8 @@ def main():
         return
     session = args.session
     if session is None:
-        saved_sessions = sorted(p.parent for p in (Path.home()/'Zigma').glob('*/connection.txt'))
+        saved_sessions = sorted(p.parent for p in (Path.home()/'Zigma').glob('*/connection.txt')
+                                if (p.parent/'plan.json').is_file() and (p.parent/'zigma_key').is_file())
         if saved_sessions:
             print('0: New installation')
             for number, path in enumerate(saved_sessions, 1):
@@ -725,9 +744,6 @@ if __name__ == '__main__':
         print('\nStopped. Do not repeat pairing blindly. A pending trial rolls back after 240 seconds; keep robot powered.')
         raise SystemExit(130)
     except Exception as exc:
-        # No raw subprocess output or HTTP bodies: they may contain credentials.
-        if isinstance(exc, subprocess.SubprocessError):
-            print('ERROR: A required system command failed. Check Wi-Fi permissions/NetworkManager and saved profile.', file=sys.stderr)
-        else:
-            print('ERROR: ' + str(exc), file=sys.stderr)
+        from ssh_output import report_exception
+        report_exception(exc)
         raise SystemExit(1)
