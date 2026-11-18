@@ -21,6 +21,7 @@ eungiot.grit-cloud.com
 apngiot.grit-cloud.com
 redmond.iot.grit-cloud.com
 weback.iot.grit-cloud.com
+zigma.iot.grit-cloud.com
 www.grit-tech.link
 56mg2g2mi4.execute-api.cn-north-1.amazonaws.com.cn
 www.grit-cs.com
@@ -74,7 +75,16 @@ while read -r name;do
 done <"$work/domains"
 echo '# END ZIGMA VENDOR LOOPBACK' >>"$work/hosts"
 if test -e "$base";then
- cmp -s "$work/hosts" "$base/hosts" || fail 'Hosts contents differ from reviewed setup; preserved'
+ if ! cmp -s "$work/hosts" "$base/hosts";then
+  # Accept only the exact previous generated list; preserve custom setups.
+  sed '/^127\.0\.0\.1 zigma\.iot\.grit-cloud\.com$/d;/^::1 zigma\.iot\.grit-cloud\.com$/d' "$work/hosts" >"$work/previous-hosts"
+  cmp -s "$work/previous-hosts" "$base/hosts" || fail 'Hosts contents differ from reviewed setup; preserved'
+  if awk '$2=="/etc/hosts" {found=1} END{exit !found}' /proc/mounts;then
+   cmp -s "$base/hosts" /etc/hosts || fail 'Conflicting hosts mount; preserved'
+  fi
+  # Keep the inode: /etc/hosts may already be bind-mounted to this file.
+  cat "$work/hosts" >"$base/hosts"
+ fi
 else
  awk '$2=="/etc/hosts" {found=1} END{exit found}' /proc/mounts || fail 'Existing hosts mount; preserved'
  mkdir -m 700 "$base"
@@ -85,5 +95,5 @@ fi
 "$init" start
 cmp -s "$work/hosts" /etc/hosts || fail 'Hosts activation failed'
 sync
-echo 'HOSTS PASS: 15 vendor domains redirected to 127.0.0.1 and ::1; persistent startup configured.'
+echo 'HOSTS PASS: 16 vendor domains redirected to 127.0.0.1 and ::1; persistent startup configured.'
 echo 'Direct IP 203.107.1.33 and existing connections are not blocked. No reboot or Wi-Fi change sent.'
