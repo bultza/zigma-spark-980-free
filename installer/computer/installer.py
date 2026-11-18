@@ -255,6 +255,10 @@ def build(profile, key, base_url, name='Vacuum', telegram=False):
         'STACK_KIB':str(sum((len(d)+1023)//1024 for n,(d,_) in files.items() if n.startswith('stack/'))+128),
         'ROBOT_NAME':name,'HOSTNAME':hostname}
     script=(ROBOT/'install.sh.in').read_text().replace('@@FIRMWARE_CHECKS@@', firmware_checks())
+    hosts_script = (ROBOT/'vendor-hosts.sh').read_text()
+    if 'ZIGMA_EMBEDDED_VENDOR_HOSTS' in hosts_script.splitlines():
+        raise ValueError('Hosts script conflicts with embedding delimiter')
+    script = script.replace('@@VENDOR_HOSTS_SCRIPT@@', hosts_script.rstrip('\n'))
     for k,v in substitutions.items():script=script.replace('@@'+k+'@@',shlex.quote(v))
     if '@@' in script:raise ValueError('Unresolved template marker')
     plan={'profile':profile,'telegram':telegram,'robot_name':name,'files':manifest,

@@ -1,4 +1,5 @@
 """Apply reviewed hosts overrides over authenticated, pinned SSH."""
+from functools import wraps
 import hashlib
 from pathlib import Path
 import re
@@ -6,6 +7,20 @@ import socket
 from nor_backup import connect, upload
 
 
+def best_effort(operation):
+    @wraps(operation)
+    def attempt(*args, **kwargs):
+        try:
+            return operation(*args, **kwargs)
+        except Exception as exc:
+            # Keep credentials out of warnings; user cancellation still propagates.
+            print('[HOSTS] WARNING: Protection could not be verified (' +
+                  type(exc).__name__ + '); continuing installation.', flush=True)
+            return False
+    return attempt
+
+
+@best_effort
 def apply(robot):
     script = (Path(__file__).resolve().parent.parent / 'robot' / 'vendor-hosts.sh').read_bytes()
     digest = hashlib.sha256(script).hexdigest()
@@ -25,7 +40,10 @@ def apply(robot):
             try:robot.command('rm -f '+stage+'/apply.sh; rmdir '+stage)
             except Exception as exc:print('[HOSTS] Staging cleanup failed: '+type(exc).__name__)
 
+    return True
 
+
+@best_effort
 def before_pairing(directory):
     """Only use a saved key after matching its pinned host key, never guess identity."""
     import paramiko
@@ -37,7 +55,7 @@ def before_pairing(directory):
             host_key=transport.get_remote_server_key()
     except (OSError, EOFError, paramiko.SSHException):
         print('[HOSTS] No SSH in pairing. The first home-Wi-Fi connection is not protected; '
-              'hosts will be changed immediately after SSH login, before the NOR backup.')
+              'the downloaded entry script will attempt to apply hosts before recording installation completion.')
         return False
     candidates=[]
     for path in sorted((Path.home()/'Zigma').glob('*/known_hosts')):
@@ -51,7 +69,7 @@ def before_pairing(directory):
     if not candidates:
         print('[HOSTS] Pairing SSH is reachable, but no matching saved host pin/key was found. '
               'No untrusted key will be used. Initial home-Wi-Fi connection is unprotected; '
-              'hosts will be applied after the new SSH stage.')
+              'the downloaded entry script will attempt to apply hosts before recording installation completion.')
         return False
     if len(candidates)==1:
         session=candidates[0]
@@ -64,7 +82,8 @@ def before_pairing(directory):
     key=paramiko.ECDSAKey.from_private_key_file(str(session/'zigma_key'))
     output=directory/'ap-hosts';wizard.private_directory(output)
     robot=wizard.Robot('192.168.99.1',key,output);robot.host_key=host_key
-    # Authentication failures stop before posting Wi-Fi credentials.
-    apply(robot)
+    # Hosts authentication failures are advisory; no untrusted key is accepted.
+    if not apply(robot):
+        return False
     print('[HOSTS] Applied and checked over pinned SSH while still in pairing, BEFORE Wi-Fi credentials are sent.')
     return True

@@ -27,7 +27,7 @@ Source paths are relative to [robot/](robot/). Entries in `bundle.tar.gz` are re
 | `activate.sh` | `bundle.tar.gz` → `stack/activate` | `/root/zigma-free/activate` | Starts and checks the local-mode trial and handles acceptance or rollback. |
 | `storage.sh` | `bundle.tar.gz` → `init/S02zigma-storage` | `/root/etc/init.d/S02zigma-storage` on the overlay layout | Sets up the storage paths used by Zigma Free. |
 | `configure-support.sh` | `bundle.tar.gz` → `support/configure-support.sh` | Sourced from `/tmp/zigma-install.*/payload/support/` during installation | Installs supporting startup hooks and tools from the payload. |
-| `vendor-hosts.sh` | Uploaded separately over SSH by `hosts_guard.py` | Runs as `/tmp/zigma-hosts-pc.*/apply.sh`. Writes persistent files under `/root/.zigma-hosts/` and the hook `/root/etc/init.d/S03zigma-hosts`. | Applies and persists overrides for known vendor hostnames. |
+| `vendor-hosts.sh` | Embedded in the entry script; also uploaded over SSH by `hosts_guard.py` | Runs as `/tmp/zigma-hosts-pc.*/apply.sh`. Writes persistent files under `/root/.zigma-hosts/` and the hook `/root/etc/init.d/S03zigma-hosts`. | Applies and persists overrides for known vendor hostnames. |
 | `init/S98zigma-free` | `bundle.tar.gz` → `init/S98zigma-free` | Staged under `/root/zigma-free/install-init/`, then installed at `/root/etc/init.d/S98zigma-free` during activation | Starts the Zigma Free services. |
 | `init/S01time`, `init/S03zigma-hostname`, `init/S96ntpsync`, `init/S97crond` | `bundle.tar.gz` → `support/` with the same filenames | `/root/etc/init.d/` | Boot hooks for time, hostname, network time sync, and cron. |
 | `src/zigma-cron`, `src/zigma-free-service`, `src/zigma-mode`, `src/zigma-mode-backend`, `src/zigma-settings` | `bundle.tar.gz` → `stack/` with the same filenames | `/root/zigma-free/` | Scheduling, service supervision, mode switching, and settings. |
@@ -91,6 +91,23 @@ See [src/README.md](../src/README.md) for the toolchain, per-component build com
 The packager puts the ARM executables and transport assets in `robot/build/`, third-party notices in `robot/vendor/`, the version inventory in `robot/versions.json`, and web assets in `web/src/` inside the archive. It writes ZIP and TAR.GZ archives with SHA-256 sidecars. The wizard checks the internal `SHA256SUMS` before starting an installation.
 
 The deployment archive exposes `start-windows.cmd` and `start-linux.sh` at the top level. They delegate to the launchers under `computer/`.
+
+### Early vendor hostname protection
+
+The generated entry script embeds the same `vendor-hosts.sh` used by the computer.
+After preflight, the install lock and pending-transaction checks, it applies and
+verifies all 16 domains before downloading a Tools/Full payload or starting the
+SSH installation transaction. This also covers an unknown-firmware fallback to
+SSH. `--check` does not apply hosts. A hosts failure prints a warning and installation continues, including SSH and
+Full. This applies to pre-pairing, the entry script, post-SSH and recovery checks.
+Other installer checks (including pending transactions) remain independent.
+Protection is retained if a later installation
+step fails; it is not rolled back with SSH or Full files.
+
+The pre-pairing SSH attempt and post-SSH verification remain in place. The initial
+Wi-Fi connection before the robot downloads its entry script is still unprotected
+when pre-pairing SSH cannot be used. Direct-IP traffic and existing connections
+are outside the scope of hosts overrides.
 
 ## Full installation walkthrough
 
