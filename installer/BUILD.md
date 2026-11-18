@@ -64,6 +64,26 @@ the compressed bundle, runs `gzip -d`, extracts with `tar -xf`, and checks the
 payload manifest before starting a transaction. Its temporary-space check reserves
 room for the uncompressed TAR as well as the extracted payload.
 
+### Timezones on firmware without zoneinfo
+
+Full installations carry the checked-in timezone database under
+`/root/zigma-free/share/zoneinfo` (tzdata version in `robot/zoneinfo/VERSION`,
+license and per-file SHA-256 manifest alongside it). Packaging validates that
+manifest and includes the files in the normal payload integrity checks and space
+calculation. SSH-only and Tools do not install this database.
+
+The agent and observer use absolute TZif paths. Settings persist the selected
+zone as `/root/etc/localtime`; the settings adapter and managed cron explicitly
+use that file through `TZ`. This works when `/usr/share/zoneinfo` and
+`/etc/localtime` are absent on a read-only root filesystem, without modifying
+that filesystem. Existing system zones remain a fallback for installations
+without the bundled database. Selecting a zone does not set the UTC clock.
+
+On Ciccia's issue01b hybrid, the menu exposes 419 zones. API changes to Madrid,
+New York and UTC, winter/summer offsets on the robot, cron's inherited TZ and
+all installed component hashes were verified. UTC was restored after testing;
+a physical power cycle was not performed.
+
 ## Compiling and packaging
 
 See [src/README.md](../src/README.md) for the toolchain, per-component build commands, and Telegram transport build. Run `python3 src/package-release.py --label dev` from the repository root after building both sets of binaries.

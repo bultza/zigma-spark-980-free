@@ -54,6 +54,15 @@ def files_for(profile, telegram=False, source_paths=None):
         add('tools/zigmactl', ROBOT/'build/zigmactl')
         add('tools/zigmactl-LICENSE-cJSON.txt', ROBOT/'vendor/cjson/LICENSE',0o644)
     if profile == 'full':
+        zone_root = ROBOT/'zoneinfo'
+        for line in (zone_root/'SHA256SUMS').read_text().splitlines():
+            expected, name = line.split('  ', 1)
+            if not re.fullmatch(r'[A-Za-z0-9_+./-]+', name) or '..' in name or name.startswith('/'):
+                raise ValueError('Invalid timezone path')
+            source = zone_root/name
+            if digest(source.read_bytes()) != expected:
+                raise ValueError('Timezone checksum mismatch: ' + name)
+            add('stack/share/zoneinfo/'+name, source, 0o644)
         for name in ('free-zigma-agent-arm','zigma-observe-arm','zigma-core-arm','zigma-network-arm',
                      'zigma-area-arm','zigma-zones-arm','zigma-maps-arm','zigma-options-arm'):
             add('stack/'+name, ROBOT/'build'/name)

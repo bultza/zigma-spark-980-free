@@ -18,6 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "cJSON.h"
+#include "zigma_timezone.h"
 
 /* Coexistence adapter: no queue reads or semaphore operations. Optional info-only request. */
 static volatile sig_atomic_t running=1;
@@ -309,15 +310,15 @@ int main(int argc,char **argv){
  const char *core_dir=NULL,*core_exe=NULL;
  bool info_requests=false;for(int i=3;i<argc;i++){if(!strcmp(argv[i],"--request-info"))info_requests=true;else if(!strcmp(argv[i],"--request-map"))map_requests=true;else if(!strcmp(argv[i],"--core-dir")&&i+1<argc)core_dir=argv[++i];else if(!strcmp(argv[i],"--core-exe")&&i+1<argc)core_exe=argv[++i];else if(!strcmp(argv[i],"--nav-pid")&&i+1<argc){nav_pid=atoi(argv[++i]);if(nav_pid<1)return 2;}else if(!strcmp(argv[i],"--app-server-pid")&&i+1<argc){cache_pid=atoi(argv[++i]);if(cache_pid<1)return 2;}else return 2;}
  if((core_dir&&!core_exe)||(!core_dir&&core_exe)||(core_dir&&(core_dir[0]!='/'||core_exe[0]!='/')))return 2;
- setenv("TZ","Europe/Madrid",1);tzset();umask(077);signal(SIGTERM,stop);signal(SIGINT,stop);
+ zigma_zone_apply("UTC");umask(077);signal(SIGTERM,stop);signal(SIGINT,stop);
  cJSON *previous=published_map(argv[1]);if(previous){remember_published_map(previous);cJSON_Delete(previous);}
  long long next_status=0;time_t requested=0,map_requested=0;while(running){
   long long tick=core_clock_ms();bool laser_active=laser_tick(argv[1],tick);
   if(tick<next_status){long long delay=next_status-tick;if(laser_active&&laser_next_sample-tick<delay)delay=laser_next_sample-tick;if(delay<1)delay=1;if(delay>2500)delay=2500;struct timespec wait={delay/1000,(delay%1000)*1000000};nanosleep(&wait,NULL);continue;}
   next_status=tick+2500;
   char demand[1024];snprintf(demand,sizeof(demand),"%s/map-demand",argv[1]);struct stat demand_stat;if(map_requests&&!stat(demand,&demand_stat)&&time(NULL)-demand_stat.st_mtime>=0&&time(NULL)-demand_stat.st_mtime<10&&time(NULL)-map_requested>=2){if(!request_map())fprintf(stderr,"Local map request unavailable\n");map_requested=time(NULL);}
-  char zonepath[256]={0};ssize_t zn=readlink("/root/etc/localtime",zonepath,sizeof(zonepath)-1);const char *prefix="/usr/share/zoneinfo/";
-  if(zn>0&&!strncmp(zonepath,prefix,strlen(prefix))){const char *zone=zonepath+strlen(prefix);if(!getenv("TZ")||strcmp(getenv("TZ"),zone)){setenv("TZ",zone,1);tzset();}}if(info_requests&&time(NULL)-requested>=20){if(!request_info())fprintf(stderr,"Local info request unavailable\n");requested=time(NULL);}
+  char zonepath[256]={0};ssize_t zn=readlink("/root/etc/localtime",zonepath,sizeof(zonepath)-1);
+  if(zn>0&&(!strncmp(zonepath,"/usr/share/zoneinfo/",strlen("/usr/share/zoneinfo/"))||!strncmp(zonepath,"/root/zigma-free/share/zoneinfo/",strlen("/root/zigma-free/share/zoneinfo/")))){if(!getenv("TZ")||strcmp(getenv("TZ"),zonepath)){setenv("TZ",zonepath,1);tzset();}}if(info_requests&&time(NULL)-requested>=20){if(!request_info())fprintf(stderr,"Local info request unavailable\n");requested=time(NULL);}
   static cJSON *last_status=NULL;
   cJSON *status=read_status(argv[2]);
   if(number(status,"observed_at")>0){cJSON_Delete(last_status);last_status=cJSON_Duplicate(status,1);}

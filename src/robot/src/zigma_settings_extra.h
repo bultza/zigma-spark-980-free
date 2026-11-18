@@ -93,5 +93,5 @@ static void ssh_add(int fd,cJSON *input){
 invalid_key:free(copy);error_response(fd,400,"Use one OpenSSH Ed25519, RSA (2048+ bit), or ECDSA P-256 public key");
 }
 static cJSON *timezone_list(void){
- cJSON *a=cJSON_CreateArray();cJSON_AddItemToArray(a,cJSON_CreateString("UTC"));FILE *f=fopen("/usr/share/zoneinfo/zone.tab","r");if(!f)return a;char line[512];while(fgets(line,sizeof(line),f)){if(line[0]=='#')continue;char country[16],coordinates[64],zone[128];if(sscanf(line,"%15s %63s %127s",country,coordinates,zone)==3){char pathbuf[256];snprintf(pathbuf,sizeof(pathbuf),"/usr/share/zoneinfo/%s",zone);if(!access(pathbuf,R_OK))cJSON_AddItemToArray(a,cJSON_CreateString(zone));}}fclose(f);return a;
+ cJSON *a=cJSON_CreateArray();cJSON_AddItemToArray(a,cJSON_CreateString("UTC"));char table[256];snprintf(table,sizeof(table),"%s/zone.tab",zigma_zone_dir());FILE *f=fopen(table,"r");if(!f)return a;char line[512];while(fgets(line,sizeof(line),f)){if(line[0]=='#')continue;char country[16],coordinates[64],zone[128];if(sscanf(line,"%15s %63s %127s",country,coordinates,zone)==3){char pathbuf[256];snprintf(pathbuf,sizeof(pathbuf),"%s/%s",zigma_zone_dir(),zone);if(!access(pathbuf,R_OK))cJSON_AddItemToArray(a,cJSON_CreateString(zone));}}fclose(f);return a;
 }

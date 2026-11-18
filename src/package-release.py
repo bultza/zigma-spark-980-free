@@ -50,6 +50,10 @@ def stage_package(root):
             relative = Path(folder) / name
             copy(REPO / 'installer' / relative, relative)
 
+    for path in sorted((REPO / "installer/robot/zoneinfo").rglob("*")):
+        if path.is_file():
+            copy(path, Path("robot/zoneinfo") / path.relative_to(REPO / "installer/robot/zoneinfo"))
+
     robot = REPO / 'src/robot'
     build = robot / 'build/musl'
     transport = build / 'transport'

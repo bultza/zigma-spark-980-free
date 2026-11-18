@@ -1,8 +1,8 @@
 /* Generated from versions.json; do not edit by hand. */
 static const struct {const char *name,*version;} zigma_versions[]={
- {"free-zigma-agent-arm","V1.22"},
+ {"free-zigma-agent-arm","V1.23"},
  {"zigma-core-arm","V1.2"},
- {"zigma-observe-arm","V1.13"},
+ {"zigma-observe-arm","V1.14"},
  {"zigma-network-arm","V1.5"},
  {"zigma-area-arm","V1.1"},
  {"zigma-zones-arm","V1.3"},
@@ -13,8 +13,8 @@ static const struct {const char *name,*version;} zigma_versions[]={
  {"zigma-mode","V1.1"},
  {"zigma-mode-backend","V1.2"},
  {"zigma-free-service","V1.5"},
- {"zigma-cron","V1.1"},
- {"zigma-settings","V1.2"},
+ {"zigma-cron","V1.2"},
+ {"zigma-settings","V1.3"},
  {"zigma-time-sync","V1.1"},
  {"bootdiag-collect.sh","V1.1"},
  {"S98zigma-mode","V1.1"},

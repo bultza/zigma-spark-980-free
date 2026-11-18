@@ -24,6 +24,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "cJSON.h"
+#include "zigma_timezone.h"
 
 #define LIMIT 32768
 #define MAX_JOBS 24
@@ -505,7 +506,7 @@ static cJSON *settings_json(void){
  cJSON *o=NULL;
  if(settings_bin){char buf[2048]={0};char *args[]={(char*)settings_bin,"get",NULL};if(!run_process(args,buf,sizeof(buf)))o=strict_json(buf);}
  if(!cJSON_IsObject(o)){cJSON_Delete(o);o=cJSON_CreateObject();setstr(o,"hostname",str(state,"hostname","demo-robot"));setstr(o,"timezone",str(state,"timezone",current_zone));}
- const char *zone=str(o,"timezone",current_zone);if(strlen(zone)<sizeof(current_zone)){snprintf(current_zone,sizeof(current_zone),"%s",zone);setenv("TZ",current_zone,1);tzset();}
+ const char *zone=str(o,"timezone",current_zone);if(strlen(zone)<sizeof(current_zone)){snprintf(current_zone,sizeof(current_zone),"%s",zone);zigma_zone_apply(current_zone);}
  setstr(o,"robot_name",str(state,"robot_name",robot));setbool(o,"editable",!strcmp(mode,"demo")||settings_bin);setbool(o,"simulated",!strcmp(mode,"demo"));
  setstr(o,"area_unit",str(state,"area_unit","m2"));
  cJSON_AddItemToObject(o,"timezones",timezone_list());setbool(o,"ssh_available",ssh_keys_file!=NULL);setbool(o,"audio_available",voices_dir!=NULL);
@@ -531,7 +532,7 @@ static bool settings_apply(cJSON *input,char *error,size_t cap){
  }else if(!strcmp(action,"timezone")){
   if(!*value||strlen(value)>=sizeof(current_zone)||strstr(value,"..")||value[0]=='/')goto invalid;
   for(const char *p=value;*p;p++)if(!isalnum((unsigned char)*p)&&!strchr("/_+-",*p))goto invalid;
-  char file[256];snprintf(file,sizeof(file),"/usr/share/zoneinfo/%s",value);FILE *zf=fopen(file,"rb");if(!zf)goto invalid;char magic[4];bool valid=fread(magic,1,4,zf)==4&&!memcmp(magic,"TZif",4);fclose(zf);if(!valid)goto invalid;
+  char file[256];snprintf(file,sizeof(file),"%s/%s",zigma_zone_dir(),value);FILE *zf=fopen(file,"rb");if(!zf)goto invalid;char magic[4];bool valid=fread(magic,1,4,zf)==4&&!memcmp(magic,"TZif",4);fclose(zf);if(!valid)goto invalid;
  }else if(local){if(strcmp(value,"m2")&&strcmp(value,"ft2"))goto invalid;
  }else if(!strcmp(action,"ntp_server")){
   size_t n=strlen(value);if(!n||n>253||!isalnum((unsigned char)value[0])||!isalnum((unsigned char)value[n-1])||strstr(value,".."))goto invalid;
@@ -541,7 +542,7 @@ static bool settings_apply(cJSON *input,char *error,size_t cap){
  }else if(option){if(strcmp(value,"true")&&strcmp(value,"false"))goto invalid;}
  if(!strcmp(mode,"commands")&&!local){char *args[]={(char*)(option?options_bin:settings_bin),(char*)action,(char*)arg,NULL};if(run_process(args,NULL,0)){snprintf(error,cap,"Setting failed or is already running. Refresh before retrying.");return false;}}
  if(!strcmp(action,"name")){setstr(state,"robot_name",value);setstr(state,"hostname",host);}
- if(!strcmp(action,"timezone")){setstr(state,"timezone",value);snprintf(current_zone,sizeof(current_zone),"%s",value);setenv("TZ",current_zone,1);tzset();}
+ if(!strcmp(action,"timezone")){setstr(state,"timezone",value);snprintf(current_zone,sizeof(current_zone),"%s",value);zigma_zone_apply(current_zone);}
  if(local||!strcmp(action,"ntp_server"))setstr(state,action,value);
  if(option&&!strcmp(mode,"demo")){if(!strcmp(action,"volume"))setnum(state,action,atoi(value));else setbool(state,action,!strcmp(value,"true"));}
  event("settings",option?"Robot setting dispatched":"Settings updated");if(!save_state()){snprintf(error,cap,"Setting processed but state could not be saved; refresh before retrying");return false;}return true;
@@ -872,7 +873,7 @@ int main(int argc,char **argv){
  }
  if(!data_arg||port<1024||port>65535|| (strcmp(mode,"demo")&&strcmp(mode,"commands"))){fprintf(stderr,"Usage: zigma-agent --data-dir /absolute/path --web-dir /assets [--mode demo|commands] [--port 8765]\n");return 2;}
  if(strlen(data_arg)>=sizeof(data_dir)||!safe_path(data_arg)){fprintf(stderr,"Data directory requires an absolute shell-safe path\n");return 2;}snprintf(data_dir,sizeof(data_dir),"%s",data_arg);
- setenv("TZ","Europe/Madrid",1);tzset();umask(077);
+ zigma_zone_apply("UTC");umask(077);
  struct in_addr checked_bind;if(inet_pton(AF_INET,bind_ip,&checked_bind)!=1){fprintf(stderr,"IPv4 listen address required\n");return 2;}
  if(run_id)return cron_client(run_id);
  char *resolved_web=web_arg?realpath(web_arg,NULL):NULL;

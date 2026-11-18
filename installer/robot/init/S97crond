@@ -5,6 +5,7 @@ set -eu
 PATH=/bin:/usr/bin:/sbin:/usr/sbin
 export PATH
 unset TZ
+if [ -f /root/etc/localtime ]; then TZ=:/root/etc/localtime; export TZ; fi
 folder=/root/etc/crontabs
 owned() {
  test "/proc/$1/exe" -ef /usr/sbin/crond || return 1

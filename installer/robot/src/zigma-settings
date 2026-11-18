@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-settings V1.2 (packaged 2026-11-08T20:48:10+00:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-settings V1.3 (packaged 2026-11-08T20:48:10+00:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Settings adapter for both reviewed layouts, including a clean installation.
@@ -9,11 +9,15 @@ set -eu
 PATH=/bin:/usr/bin:/sbin:/usr/sbin
 export PATH
 unset TZ
+if [ -f /root/etc/localtime ]; then TZ=:/root/etc/localtime; export TZ; fi
+zone_dir=/usr/share/zoneinfo
+[ ! -f /root/zigma-free/share/zoneinfo/zone.tab ] || zone_dir=/root/zigma-free/share/zoneinfo
 case "${1:-}" in
  get)
   host=$(hostname)
   zone=$(readlink /root/etc/localtime 2>/dev/null || true)
   zone=${zone#/usr/share/zoneinfo/}
+  zone=${zone#/root/zigma-free/share/zoneinfo/}
   case "$host" in ''|*[!a-zA-Z0-9-]*) host=unknown;; esac
   case "$zone" in ''|*[!a-zA-Z0-9_+/-]*) zone=UTC;; esac
   server=time.google.com
@@ -38,19 +42,19 @@ case "${1:-}" in
  timezone)
   value=${2:-}
   case "$value" in ''|/*|*..*|*[!a-zA-Z0-9_+/-]*) exit 2;; esac
-  test -f "/usr/share/zoneinfo/$value"
+  test -f "$zone_dir/$value"
   # Validate restart support before changing the timezone. Lock only this edit.
   test -x /root/etc/init.d/S97crond
   exec 8>/tmp/zigma-timezone.lock
   flock -n 8 || exit 3
-  if [ "$(readlink /root/etc/localtime 2>/dev/null || true)" = "/usr/share/zoneinfo/$value" ]; then exit 0; fi
+  if [ "$(readlink /root/etc/localtime 2>/dev/null || true)" = "$zone_dir/$value" ]; then exit 0; fi
   old=/root/etc/localtime.zigma-old
   test ! -e "$old" && test ! -L "$old"
   present=0
   if test -e /root/etc/localtime || test -L /root/etc/localtime; then
    cp -P /root/etc/localtime "$old"; present=1
   fi
-  ln -s "/usr/share/zoneinfo/$value" /root/etc/localtime.zigma-new
+  ln -s "$zone_dir/$value" /root/etc/localtime.zigma-new
   mv -f /root/etc/localtime.zigma-new /root/etc/localtime
   if ! /root/etc/init.d/S97crond restart 8>&-; then
    rm -f /root/etc/localtime
