@@ -49,7 +49,7 @@ fi
 # Other hashes decide tools/full compatibility, not SSH access.
 @@FIRMWARE_CHECKS@@
 if test "$profile" != ssh;then
- for tool in wget tar;do command -v "$tool" >/dev/null || fail "Missing tool: $tool";done
+ for tool in wget tar gzip;do command -v "$tool" >/dev/null || fail "Missing tool: $tool";done
 fi
 for dir in /root /root/.ssh /root/etc /root/etc/init.d /root/.zigma-install; do safe_dir "$dir";done
 targets='/root/.ssh/authorized_keys /root/etc/init.d/S98dropbear'
@@ -108,7 +108,7 @@ if test "$profile" = full && test "$already" = 0;then
  test "$stack_free" -ge "$stack_required" || fail "Insufficient stack space with reserve (available ${stack_free} KiB, need ${stack_required} KiB)"
 fi
 temporary_kib=1024
-if test "$profile" != ssh;then temporary_kib=$((bundle_kib+payload_kib+8192));fi
+if test "$profile" != ssh;then temporary_kib=$((bundle_kib+2*payload_kib+8192));fi
 test "$(free_kib /tmp)" -ge "$temporary_kib" || fail 'Insufficient temporary filesystem space'
 ram_kib=$(awk '/^MemAvailable:/ {available=$2} /^MemFree:/ {free=$2} END {print available ? available : free+0}' /proc/meminfo)
 test "$ram_kib" -ge "$temporary_kib" || fail 'Insufficient available RAM with 8 MiB reserve' 
@@ -125,9 +125,11 @@ if test "$profile" != ssh;then
  wget -q -T 30 -O "$stage/bundle.tar.gz" "$server/bundle.tar.gz"
  test "$(sha "$stage/bundle.tar.gz")" = "$bundle_sha" || fail 'Bundle hash mismatch'
  mkdir "$stage/payload"
- tar -xzf "$stage/bundle.tar.gz" -C "$stage/payload"
+ # Some reviewed BusyBox builds provide gzip but omit tar -z support.
+ gzip -d "$stage/bundle.tar.gz"
+ tar -xf "$stage/bundle.tar" -C "$stage/payload"
  (cd "$stage/payload"; test ! -s SHA256SUMS || sha256sum -c SHA256SUMS)
- rm "$stage/bundle.tar.gz"
+ rm "$stage/bundle.tar"
 fi
 tx=/root/.zigma-install/transaction-$(date +%s)-$$
 mkdir "$tx"; : >"$tx/paths"

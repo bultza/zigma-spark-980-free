@@ -47,6 +47,23 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s installer/tests -p tes
 
 Each profile supplies the Wi-Fi executable directory and library search path. The installer records the selected profile in `installer-firmware` in the staged stack. The mode coordinator and its backend use the same record to run the network service and identify the vendor supplicant. Legacy installations without the record retain the original paths.
 
+### Issue 01b and the Ciccia test hybrid
+
+`direct-kernel16` identifies the original issue 01b firmware. The separate
+`ciccia-hybrid-01b-kernel23` profile identifies the test image with the same
+direct layout and userspace, but Ciccia's exact DTB, kernel #23 and Wi-Fi module.
+Both retain `/usr/bin` Wi-Fi executables and `/usr/lib:/lib` library paths.
+The hybrid is a test configuration, not an additional original vendor firmware.
+Its Full installation, local-mode activation, SSH, authenticated web and installed
+component hashes were verified on Ciccia. Physical cleaning and cold-boot
+persistence remain untested; this does not validate the original kernel #16's
+flash-writing behavior. No vendor binaries are replaced by these profiles.
+
+Issue 01b's BusyBox provides gzip but its tar lacks `-z`. The installer verifies
+the compressed bundle, runs `gzip -d`, extracts with `tar -xf`, and checks the
+payload manifest before starting a transaction. Its temporary-space check reserves
+room for the uncompressed TAR as well as the extracted payload.
+
 ## Compiling and packaging
 
 See [src/README.md](../src/README.md) for the toolchain, per-component build commands, and Telegram transport build. Run `python3 src/package-release.py --label dev` from the repository root after building both sets of binaries.

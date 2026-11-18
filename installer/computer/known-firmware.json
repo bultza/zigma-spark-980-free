@@ -104,6 +104,33 @@
         "/usr/lib/libnl.so.1": "5286469bf4c3720c1126c2b54f6a0f2e648b7dc738ef91fffeb1edae488ad08f",
         "/root/etc/udhcpc.script": "7f9428aae1e5f35592b21e418c3d366cc91c7c6e58e07a02771d929f1a0f8a7a"
       }
+    },
+    "ciccia-hybrid-01b-kernel23": {
+      "layout": "direct",
+      "wifi_bin": "/usr/bin",
+      "wifi_libs": "/usr/lib:/lib",
+      "files": {
+        "/dev/mtd1": "0ed7dd1f94706b4202101727c57a4f5a9c966559078c89f7f37ced7115ad3b3b",
+        "/dev/mtd2": "0e912343ba5e0ce27e302c3b98b0755540be6c503838d6bf8cca0633d2300d3c",
+        "/dev/mtd3": "4034127dee238bc823c90b6a5afb5ee66f3efed64cd8d9130019d23b1ec872a3",
+        "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+        "/bin/busybox": "1e81aa78ca0fd0bb74133c35f8b3c033d858d0fb362b78b5f3984970599a0e27",
+        "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+        "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+        "/root/yg/ygclient": "2bc882825a5d8d56286f5f792add41a842593d292ee059317ff2d3fbc8c95d2e",
+        "/root/app_server/daemon": "6af2edd1f967e049cf2ea096dd4b19118d67072ff110ab43e2d323c2aa396107",
+        "/root/app_server/wifi_app_server_grit": "4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a",
+        "/root/hoslam/demo_rplidar": "b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255",
+        "/root/modules/8189fs.ko": "04eb388d14a53145c7b00790519f084d472b1fee87811c8313b6bc418b9fe208",
+        "/root/bin/hold380": "eec3bbb4eb729d4f15e2dd2003c3d69882d080099035811f1223ebf4db71ec99",
+        "/root/etc/init.d/S70yg": "d700033a380b880f8a68a0d67f80ae012cfdec0733f43ff4f0305bb67bf04a35",
+        "/root/etc/init.d/S99daemon": "8996c8426d0c86b6ac0868a5bc037419bf612914961619fcc83b57788cd38841",
+        "/usr/bin/wpa_supplicant": "471adf407c968deb82eeb5a759644df597e34a8d9541637ede56c420b3fc5a1b",
+        "/usr/bin/wpa_cli": "a938d8b857711cb94ce1fcf03d2560e0cc30ab2114df8b07764c40329d18291b",
+        "/usr/bin/hostapd": "17f9aa7ba04653d10026b815a3ee97bb407cae9ca2ee5d542bc975b86848174f",
+        "/usr/lib/libnl.so.1": "5286469bf4c3720c1126c2b54f6a0f2e648b7dc738ef91fffeb1edae488ad08f",
+        "/root/etc/udhcpc.script": "7f9428aae1e5f35592b21e418c3d366cc91c7c6e58e07a02771d929f1a0f8a7a"
+      }
     }
   }
 }

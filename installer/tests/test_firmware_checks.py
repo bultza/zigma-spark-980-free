@@ -50,6 +50,27 @@ class FirmwareChecks(unittest.TestCase):
                 self.assertTrue(result.startswith('RESULT:full:0:'))
         self.assertIn(':/usr/bin:/usr/lib:/lib', self.run_checks('direct-kernel16')[0])
 
+    def test_issue01b_hybrid_exact_components(self):
+        name = 'ciccia-hybrid-01b-kernel23'
+        original = CATALOG['variants']['direct-kernel16']
+        hybrid = CATALOG['variants'][name]
+        self.assertEqual({p for p in original['files']
+                          if original['files'][p] != hybrid['files'][p]},
+                         {'/dev/mtd1', '/dev/mtd2', '/root/modules/8189fs.ko'})
+        self.assertEqual(hybrid['layout'], 'direct')
+        for requested in ['ssh', 'tools', 'full']:
+            result, output = self.run_checks(name, requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/usr/bin:/usr/lib:/lib')
+            self.assertIn('Firmware recognized: ' + name, output)
+        for path in hybrid['files']:
+            if path == '/root/yg/ygclient':
+                continue  # Existing readable-client warning policy is unchanged.
+            with self.subTest(path=path):
+                result, _ = self.run_checks(name, changed={path:'a'*64})
+                self.assertTrue(result.startswith('RESULT:ssh:1:'))
+        result, _ = self.run_checks(name, pair='puron')
+        self.assertTrue(result.startswith('RESULT:ssh:1:'))
+
     def test_puron_pair_all_requested_profiles(self):
         for requested in ['ssh', 'tools', 'full']:
             with self.subTest(profile=requested):
