@@ -92,11 +92,14 @@ static bool memory_read(int fd,uint32_t address,void *data,size_t n){return addr
 /* Validated only for Caccamora's 4cf07099 app-server build. */
 static void replace_value(cJSON *o,const char *key,cJSON *value){cJSON_DeleteItemFromObjectCaseSensitive(o,key);cJSON_AddItemToObject(o,key,value);}
 #include "zigma_core_observation.h"
+#include "zigma_navigation_profile.h"
 static cJSON *cached_navigation_pose(int fd,const cJSON *geometry){
- /* CommVSLAM singleton/GOT and pose getter, nav build b10fc7b4 only. */
+ /* Profile-specific singleton; shared geometry/pose layout, validated below. */
  uint32_t base=0,again=0,vtable=0,vagain=0;unsigned char a[40],b[40],ma[28],mb[28];
- if(!geometry||!memory_read(fd,0x444594,&base,4)||base!=0x45a200||!memory_read(fd,base,&vtable,4)||vtable!=0x43b4f4)return NULL;
- if(!memory_read(fd,base+0x1120,a,sizeof(a))||!memory_read(fd,base+0xe44,ma,sizeof(ma))||!memory_read(fd,base+0x1120,b,sizeof(b))||!memory_read(fd,base+0xe44,mb,sizeof(mb))||memcmp(a,b,sizeof(a))||memcmp(ma,mb,sizeof(ma))||!memory_read(fd,0x444594,&again,4)||again!=base||!memory_read(fd,base,&vagain,4)||vagain!=vtable)return NULL;
+ const struct navigation_profile *profile=navigation_profile_fd(fd);
+ if(!geometry||!profile)return NULL;
+ base=profile->base;vtable=profile->vtable;
+ if(!memory_read(fd,base+0x1120,a,sizeof(a))||!memory_read(fd,base+0xe44,ma,sizeof(ma))||!memory_read(fd,base+0x1120,b,sizeof(b))||!memory_read(fd,base+0xe44,mb,sizeof(mb))||memcmp(a,b,sizeof(a))||memcmp(ma,mb,sizeof(ma))||!memory_read(fd,profile->slot,&again,4)||again!=base||!memory_read(fd,base,&vagain,4)||vagain!=vtable)return NULL;
  if(a[0]!=1||a[1]!=1)return NULL;
  float pose[3],origin[2],resolution;uint32_t dimensions[2];memcpy(pose,a+28,12);memcpy(origin,ma+8,8);memcpy(dimensions,ma+16,8);memcpy(&resolution,ma+24,4);
  cJSON *grid_origin=get((cJSON*)geometry,"map_origin"),*ox=cJSON_GetArrayItem(grid_origin,0),*oy=cJSON_GetArrayItem(grid_origin,1),*id=get((cJSON*)geometry,"map_id");

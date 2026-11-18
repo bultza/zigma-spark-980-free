@@ -682,7 +682,7 @@ static void delete_saved_map(int fd,cJSON *input,bool clear){
  if(get(input,"backup")&&!cJSON_IsBool(get(input,"backup"))){error_response(fd,400,"backup must be a boolean");return;}
  const char *id=str(input,"id",""),*revision=str(input,"revision","");
  if(!saved_id(id)||!cJSON_IsTrue(get(input,"confirm"))||(backup_required&&!map_library_dir)||!maps_app_pid||(clear&&strcmp(str(input,"confirmation_text",""),"CLEAR"))){error_response(fd,400,"Confirmed deletion requires a master library and native map identity");return;}
- if(reset_waiting()){error_response(fd,409,"A clear request is already awaiting a new map; no order was repeated");return;}
+ if(reset_waiting()&&!strcmp(str(get(state,"map_reset_pending"),"operation",""),"restore")){error_response(fd,409,"Wait for the pending restoration before deleting maps");return;}
  cJSON *st=status_json();const char *work=str(st,"working_status","");bool ready=(cJSON_IsTrue(get(st,"fresh"))||(cJSON_IsTrue(get(st,"cache_available"))&&cJSON_IsTrue(get(st,"local_link_active"))))&&!strcmp(str(st,"error",""),"NoError")&&(!strcmp(work,"PileCharging")||!strcmp(work,"DirCharging")||!strcmp(work,"Standby")||!strcmp(work,"Hibernating")||!strcmp(work,"charging")||!strcmp(work,"idle"));cJSON_Delete(st);
  if(!ready){error_response(fd,409,"Deleting a robot map requires an idle robot with recent local communication and no error");return;}
  cJSON *active=native_map_id();const char *current=str(active,"id","");
@@ -715,9 +715,18 @@ static cJSON *maps_catalog(void){
  cJSON *item;cJSON_ArrayForEach(item,get(o,"items"))setstr(item,"name",saved_name(str(item,"id","")));
  cJSON *map=demo_map();const char *id=str(map,"map_id","");
  if(saved_id(id)&&!reset_waiting())cJSON_AddStringToObject(o,"last_observed_active_id",id);else cJSON_AddNullToObject(o,"last_observed_active_id");
- cJSON_Delete(map);cJSON *native=native_map_id();const char *active=str(native,"id","");
- if(saved_id(active)&&!reset_waiting())cJSON_AddStringToObject(o,"native_active_id",active);else cJSON_AddNullToObject(o,"native_active_id");
- cJSON_AddBoolToObject(o,"delete_available",!reset_waiting()&&saved_id(active)&&map_library_dir);cJSON_AddBoolToObject(o,"clear_available",!reset_waiting()&&saved_id(active)&&map_library_dir);cJSON_AddBoolToObject(o,"reset_pending",reset_waiting());cJSON_AddBoolToObject(o,"library_available",map_library_dir!=NULL);cJSON_Delete(native);
+ cJSON_Delete(map);cJSON *native=native_map_id();
+ /* A restarted Puron server may have no cached map ID. Request current-map metadata on
+    catalog demand, at most once per 30 seconds. Puron can save its current
+    snapshot when answering; no map selection or clear is sent. */
+ static time_t last_identity_query=0;
+ if(!saved_id(str(native,"id",""))&&maps_bin&&maps_app_pid&&time(NULL)-last_identity_query>=30){
+  last_identity_query=time(NULL);char *args[]={(char*)maps_bin,"refresh-active",(char*)maps_app_pid,NULL};
+  cJSON *refreshed=maps_helper_json(args,2048);cJSON_Delete(native);native=refreshed;
+ }
+ const char *active=str(native,"id","");
+ if(saved_id(active))cJSON_AddStringToObject(o,"native_active_id",active);else cJSON_AddNullToObject(o,"native_active_id");
+ cJSON_AddBoolToObject(o,"delete_available",saved_id(active)&&map_library_dir);cJSON_AddBoolToObject(o,"clear_available",saved_id(active)&&strcmp(active,"0")&&map_library_dir&&!cJSON_IsFalse(get(native,"clear_available")));cJSON_AddBoolToObject(o,"reset_pending",reset_waiting());cJSON_AddBoolToObject(o,"library_available",map_library_dir!=NULL);cJSON_Delete(native);
  cJSON_AddStringToObject(o,"active_source","observed_map_cache");cJSON_AddNumberToObject(o,"read_at",time(NULL));
  cJSON *context=restore_helper("restore-context",NULL);if(context)cJSON_AddItemToObject(o,"restore_context",context);
  cJSON_AddBoolToObject(o,"restore_available",!strcmp(mode,"commands")&&map_library_dir&&context&&cJSON_IsTrue(get(context,"idle"))&&(!reset_waiting()||strcmp(str(get(state,"map_reset_pending"),"operation",""),"restore")||!strcmp(str(get(state,"map_reset_pending"),"phase",""),"restore_failed")));

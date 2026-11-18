@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 /* HOSLAM catalog and private master library. Native deletion is an explicit,
-   guarded type-9 operation; catalog/preview never send IPC. No cloud access. */
+   guarded type-9 operation; catalog/preview never send IPC. Explicit refresh-active requests native current-map metadata. No cloud access. */
 #include "zigma_version.h"
 #include <dirent.h>
 #include <errno.h>
@@ -39,7 +39,8 @@ static bool read_named_map(int dir,const char *name,uint32_t id,struct map *m){
  close(fd);
  if(!ok)goto fail;
  unsigned char *b=m->data;
- if(memcmp(b,"relo",4)||u32(b+4)!=7||u32(b+8)!=m->size||u32(b+20)!=id)goto fail;
+ /* Both relo 6 and 7 use the validated GRID v2 layout below. */
+ if(memcmp(b,"relo",4)||(u32(b+4)!=6&&u32(b+4)!=7)||u32(b+8)!=m->size||u32(b+20)!=id)goto fail;
  bool found=false;for(size_t i=24;i+GRID_HEADER<=m->size;i++)if(!memcmp(b+i,"GRID",4)){m->grid=i;found=true;break;}if(!found)goto fail;
  unsigned char *g=b+m->grid;m->w=u32(g+40);m->h=u32(g+44);m->packed=u32(g+80);uint32_t aux=u32(g+84);
  if(u32(g+4)!=2||!m->w||!m->h||m->w>2048||m->h>2048||(uint64_t)m->w*m->h>1000000||u32(g+76)!=m->w*m->h||!m->packed||(uint64_t)GRID_HEADER+m->packed+aux!=u32(g+8)||(uint64_t)m->grid+GRID_HEADER+m->packed+aux>m->size)goto fail;
@@ -91,6 +92,7 @@ int main(int argc,char **argv){
  if(argc==4&&!strcmp(argv[1],"restore-probe"))return restore_probe(argv[2],argv[3]);
  if(argc==4&&(!strcmp(argv[1],"restore-native")||!strcmp(argv[1],"restore-dry-run")))return native_restore_command(argv[2],argv[3],!strcmp(argv[1],"restore-dry-run"));
  if(argc==5&&!strcmp(argv[1],"library"))return library_command(argv[2],argv[3],argv[4]);
+ if(argc==3&&!strcmp(argv[1],"refresh-active"))return puron_refresh_active(argv[2]);
  if(argc==3&&!strcmp(argv[1],"active"))return native_active_command(argv[2]);
  if(argc==4&&(!strcmp(argv[1],"delete-native")||!strcmp(argv[1],"delete-dry-run")))return native_delete_command(argv[2],argv[3],!strcmp(argv[1],"delete-dry-run"),false);
  if(argc==4&&(!strcmp(argv[1],"clear-native")||!strcmp(argv[1],"clear-dry-run")))return native_delete_command(argv[2],argv[3],!strcmp(argv[1],"clear-dry-run"),true);

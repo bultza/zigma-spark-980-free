@@ -19,7 +19,7 @@ static bool restore_package(const struct map *m,const char *dest){
  int fd=open(dest,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600);bool ok=fd>=0&&write_bytes(fd,gz,off);free(gz);if(fd>=0&&close(fd))ok=false;if(!ok)unlink(dest);return ok;
 }
 static cJSON *restore_context(const char *pid){
- uint32_t id;if(!native_identity(pid,&id))return NULL;
+ uint32_t id;if(!native_restore_supported(pid)||!native_identity(pid,&id))return NULL;
  cJSON *o=cJSON_CreateObject();char text[16];snprintf(text,sizeof(text),"%u",id);cJSON_AddStringToObject(o,"id",text);cJSON_AddBoolToObject(o,"idle",native_idle(pid));
  struct stat log;if(!stat("/tmp/app_server.log",&log)&&S_ISREG(log.st_mode)){cJSON_AddNumberToObject(o,"log_inode",log.st_ino);cJSON_AddNumberToObject(o,"log_offset",log.st_size);}return o;
 }
@@ -42,6 +42,7 @@ static int native_restore_command(const char *pid,const char *json,bool dry){
  if(!valid||!restore_checksum(&m)){error="Master changed or failed native integrity verification; refresh copies";goto done;}
  cJSON *decoded=preview(&m);if(!decoded){error="Master cannot be decoded";goto done;}cJSON_Delete(decoded);
  if(!dry){
+  if(!native_restore_supported(pid)){error="Native restore is not validated for this firmware";goto done;}
   uint32_t now;if(!native_identity(pid,&now)||now!=expected||!native_idle(pid)){error="Robot must be idle with unchanged map identity";goto done;}
   struct stat st;const char *reserved[]={"/tmp/tmp.tar","/tmp/tmp.tar.gz","/tmp/hoslam_map"};for(int i=0;i<3;i++)if(lstat(reserved[i],&st)==0||errno!=ENOENT){error="Native import workspace is occupied; no restore sent";goto done;}
   int source=open(string(r,"source_dir"),O_RDONLY|O_DIRECTORY|O_NOFOLLOW);if(source<0){error="Robot maps unavailable";goto done;}

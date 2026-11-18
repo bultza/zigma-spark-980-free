@@ -7,7 +7,7 @@ static bool laser_have=false,laser_was_active=false;
 static long long laser_changed=0,laser_attempt=0,laser_next_sample=0;
 static unsigned laser_sequence=0;
 static cJSON *laser_pose=NULL;
-/* Hash recognition does not establish compatibility with the guarded memory layout. */
+/* Exact executable allowlist plus an independently guarded memory profile. */
 static bool laser_hash_allowed(const char *hex){
  return !strcmp(hex,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255")||
         !strcmp(hex,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8");
@@ -24,14 +24,13 @@ static bool laser_hash(pid_t pid){
  for(int i=0;i<32;i++)snprintf(hex+i*2,3,"%02x",hash[i]);
  return laser_hash_allowed(hex);
 }
-static bool laser_guard(int fd){uint32_t p=0,v=0;return memory_read(fd,0x444594,&p,4)&&p==0x45a200&&memory_read(fd,p,&v,4)&&v==0x43b4f4;}
 static bool laser_copy(int fd,float *a){
- float b[360];if(!laser_guard(fd))return false;
+ const struct navigation_profile *profile=navigation_profile_fd(fd);float b[360];if(!profile)return false;
  for(int j=0;j<3;j++){
-  if(!memory_read(fd,0x45a204,a,sizeof b)||!memory_read(fd,0x45a204,b,sizeof b))return false;
+  if(!memory_read(fd,profile->base+4,a,sizeof b)||!memory_read(fd,profile->base+4,b,sizeof b))return false;
   if(memcmp(a,b,sizeof b))continue;
   for(int i=0;i<360;i++)if(!isfinite(a[i])||a[i]<0||a[i]>100)return false;
-  return laser_guard(fd);
+  return navigation_profile_fd(fd)==profile;
  }return false;
 }
 static void laser_close(void){if(laser_fd>=0)close(laser_fd);laser_fd=-1;laser_ticks=0;laser_have=false;laser_changed=0;laser_sequence=0;cJSON_Delete(laser_pose);laser_pose=NULL;}

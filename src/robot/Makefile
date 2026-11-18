@@ -28,7 +28,7 @@ $(OUTPUT)/zigma-core-arm: src/zigma_core.c src/zigma_local_ipc.c $(CJSON) $(CRYP
 $(OUTPUT)/zigma-network-arm: src/zigma_network.c
 $(OUTPUT)/zigma-area-arm: src/zigma_area.c
 $(OUTPUT)/zigma-zones-arm: src/zigma_zones.c $(CJSON) $(CRYPTO)
-$(OUTPUT)/zigma-maps-arm: src/zigma_maps.c $(CJSON)
+$(OUTPUT)/zigma-maps-arm: src/zigma_maps.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-options-arm: src/zigma_options.c
 $(OUTPUT)/zigmactl: src/zigmactl.c $(CJSON)
 $(OUTPUT)/zigma-nor-backup-arm: src/zigma_nor_backup.c $(CRYPTO)
@@ -72,3 +72,21 @@ test-zone-commands:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_zone_commands.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-zone-commands
 	build/tests/test-zone-commands
+
+.PHONY: test-map-formats
+test-map-formats:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_map_formats.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-map-formats
+	build/tests/test-map-formats
+
+.PHONY: test-map-native
+test-map-native:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_map_native.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-map-native
+	build/tests/test-map-native
+
+.PHONY: test-navigation-profiles
+test-navigation-profiles:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_navigation_profiles.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-navigation-profiles
+	build/tests/test-navigation-profiles

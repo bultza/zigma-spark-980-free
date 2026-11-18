@@ -1,12 +1,12 @@
 /* Generated from versions.json; do not edit by hand. */
 static const struct {const char *name,*version;} zigma_versions[]={
- {"free-zigma-agent-arm","V1.23"},
+ {"free-zigma-agent-arm","V1.26"},
  {"zigma-core-arm","V1.2"},
- {"zigma-observe-arm","V1.14"},
+ {"zigma-observe-arm","V1.15"},
  {"zigma-network-arm","V1.5"},
  {"zigma-area-arm","V1.1"},
  {"zigma-zones-arm","V1.3"},
- {"zigma-maps-arm","V1.4"},
+ {"zigma-maps-arm","V1.10"},
  {"zigma-options-arm","V1.1"},
  {"zigma-curl-arm","V1.1"},
  {"zigmactl","V1.7"},
