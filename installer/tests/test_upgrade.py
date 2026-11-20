@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, Mock, patch
 
 HERE = Path(__file__).resolve().parents[1]/'computer'
 sys.path.insert(0, str(HERE))
@@ -83,6 +83,92 @@ class Connections(unittest.TestCase):
             client.return_value.set_missing_host_key_policy.assert_not_called()
 
 
+class Reconnection(unittest.TestCase):
+    def test_temporary_disconnect_recovers(self):
+        robot = Mock()
+        robot.command.side_effect = [TimeoutError(), EOFError(), paramiko.SSHException('banner'), 'ready']
+        with patch.object(upgrade.time, 'sleep'):
+            self.assertEqual(upgrade.transaction_state(robot, '/tmp/stage', time.monotonic()+30), 'ready')
+        self.assertEqual(robot.command.call_count, 4)
+
+    def test_deadline_bounds_disconnect(self):
+        robot = Mock()
+        robot.command.side_effect = TimeoutError()
+        with self.assertRaises(TimeoutError):
+            upgrade.transaction_state(robot, '/tmp/stage', time.monotonic()-1)
+        self.assertEqual(robot.command.call_count, 1)
+
+    def test_identity_authentication_and_remote_errors_are_fatal(self):
+        for error in (ValueError('host key changed'), paramiko.AuthenticationException('denied'), RuntimeError('remote failure')):
+            robot = Mock()
+            robot.command.side_effect = error
+            with self.assertRaises(type(error)):
+                upgrade.transaction_state(robot, '/tmp/stage', time.monotonic()+30)
+            self.assertEqual(robot.command.call_count, 1)
+
+
+class UpgradeFlow(unittest.TestCase):
+    def test_absent_web_file_has_no_fake_backup(self):
+        self.presence = 'absent'
+        self.test_lost_launch_poll_and_accept_responses_do_not_repeat_transaction()
+
+    def test_lost_launch_poll_and_accept_responses_do_not_repeat_transaction(self):
+        from contextlib import ExitStack
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            home = Path(tmp)
+            robot = Mock()
+            calls = []
+            state = 'ready'
+            disconnected = False
+            def command(cmd, **kwargs):
+                nonlocal state, disconnected
+                calls.append(cmd)
+                if cmd.startswith('test ! -L ') and 'echo present' in cmd:
+                    return getattr(self, 'presence', 'present')
+                if 'mktemp -d' in cmd:
+                    return '/tmp/zigma-upgrade.fixture'
+                if cmd == 'cat /proc/sys/kernel/random/boot_id':
+                    return 'fixture-boot'
+                if cmd.startswith('nohup '):
+                    raise EOFError()
+                if cmd.startswith('cat /tmp/zigma-upgrade.fixture/state'):
+                    if not disconnected:
+                        disconnected = True
+                        raise TimeoutError()
+                    return state
+                if cmd.endswith(' accept'):
+                    state = 'accepted'
+                    raise TimeoutError()
+                if '/done && echo done' in cmd:
+                    return 'done'
+                return ''
+            robot.command.side_effect = command
+            inventory = {'items': [{'name': 'fixture', 'kind': 'binary', 'sha256': 'newsha'}]}
+            for target, value in [
+                ('select_connection', ('192.0.2.1', home/'key', Mock())),
+                ('load_key', Mock()), ('connect', MagicMock()), ('upload', None),
+                ('idle', None), ('firmware_gate', 'true'),
+                ('read_file', (b'old', '600')),
+                ('read_bytes', json.dumps(inventory).encode()),
+                ('payload', {'/root/zigma-free/src/app.js': (b'new', 0o644)}),
+                ('api', {'items': [dict(inventory['items'][0], status='verified')]}),
+            ]:
+                stack.enter_context(patch.object(upgrade, target, return_value=value))
+            stack.enter_context(patch.object(Path, 'home', return_value=home))
+            stack.enter_context(patch('wizard.Robot', return_value=robot))
+            stack.enter_context(patch.object(upgrade.time, 'sleep'))
+            upgrade.upgrade()
+            self.assertEqual(sum(cmd.startswith('nohup ') for cmd in calls), 1)
+            self.assertEqual(sum(cmd.endswith(' accept') for cmd in calls), 1)
+            self.assertFalse(any('rollback.now' in cmd for cmd in calls))
+            self.assertEqual(len(list(home.glob('Zigma/*/verified.json'))), 1)
+            if getattr(self, 'presence', 'present') == 'absent':
+                session = next(home.glob('Zigma/*'))
+                self.assertIn(' - 644 absent ', (session/'files.list').read_text())
+                self.assertFalse((session/'0.old.gz').exists())
+
+
+
 class Transaction(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='rc10-test-')
@@ -129,6 +215,62 @@ class Transaction(unittest.TestCase):
             time.sleep(.02)
         self.fail((self.stage/'log').read_text())
 
+    def test_legacy_install_without_directory(self):
+        directory = self.root/'root/.zigma-install'
+        directory.rmdir()
+        process = self.start(); self.ready(process)
+        self.assertTrue(directory.is_dir())
+        subprocess.run(['sh', str(self.script), str(self.stage), 'accept'], check=True)
+        self.assertEqual(process.wait(timeout=5), 0)
+
+    def test_lock_directory_reports_failure(self):
+        (self.root/'root/.zigma-install/lock').mkdir()
+        self.assertNotEqual(self.start().wait(timeout=5), 0)
+        self.assertEqual((self.stage/'state').read_text().strip(), 'failed')
+        self.assertEqual(self.target.read_bytes(), b'old')
+
+    def new_asset(self):
+        self.target.unlink()
+        (self.stage/'0.old.gz').unlink()
+        (self.stage/'files.list').write_text(f'0 {self.target} - 644 absent {self.newsha}\n')
+
+    def test_new_asset_accept(self):
+        self.new_asset()
+        process = self.start(); self.ready(process)
+        subprocess.run(['sh', str(self.script), str(self.stage), 'accept'], check=True)
+        self.assertEqual(process.wait(timeout=5), 0)
+        self.assertEqual(self.target.read_bytes(), b'new')
+        self.assertEqual(self.target.stat().st_mode & 0o777, 0o644)
+
+    def test_new_asset_rollback_removes_file(self):
+        self.new_asset()
+        process = self.start(); self.ready(process)
+        (self.stage/'rollback.now').touch()
+        process.wait(timeout=5)
+        self.assertFalse(self.target.exists())
+        self.assertEqual((self.stage/'state').read_text().strip(), 'rolled-back')
+
+    def test_new_asset_external_change_not_removed(self):
+        self.new_asset()
+        process = self.start(); self.ready(process)
+        self.target.write_bytes(b'external')
+        (self.stage/'rollback.now').touch()
+        process.wait(timeout=5)
+        self.assertEqual(self.target.read_bytes(), b'external')
+        self.assertEqual((self.stage/'state').read_text().strip(), 'rollback-failed')
+
+    def test_new_asset_appearing_before_install_is_preserved(self):
+        self.new_asset()
+        self.target.write_bytes(b'external')
+        self.assertNotEqual(self.start().wait(timeout=5), 0)
+        self.assertEqual(self.target.read_bytes(), b'external')
+
+    def test_new_asset_dangling_symlink_refused(self):
+        self.new_asset()
+        self.target.symlink_to(self.base/'missing')
+        self.assertNotEqual(self.start().wait(timeout=5), 0)
+        self.assertTrue(self.target.is_symlink())
+
     def test_accept(self):
         process = self.start();self.ready(process)
         subprocess.run(['sh', str(self.script), str(self.stage), 'accept'], check=True)
@@ -153,6 +295,7 @@ class Transaction(unittest.TestCase):
         self.target.write_bytes(b'other')
         self.assertNotEqual(self.start().wait(timeout=5), 0)
         self.assertEqual(self.target.read_bytes(), b'other')
+        self.assertEqual((self.stage/'state').read_text().strip(), 'failed')
 
     def test_corrupt_upload_refused(self):
         (self.stage/'0.new.gz').write_bytes(gzip.compress(b'bad'))

@@ -18,7 +18,7 @@ APP = '/root/app_server/wifi_app_server_grit'
 NAV = '/root/hoslam/demo_rplidar'
 
 class FirmwareChecks(unittest.TestCase):
-    def run_checks(self, name=BASE, pair=None, changed=None, requested='full'):
+    def run_checks(self, name=BASE, pair=None, changed=None, requested='full', catalog=None):
         variant = CATALOG['variants'][name]
         hashes = dict(variant['files'])
         if pair:
@@ -36,7 +36,7 @@ class FirmwareChecks(unittest.TestCase):
         script = 'set -eu\n' + '\n'.join(fake) + '\n'
         script += 'layout=' + shlex.quote(variant['layout']) + '\n'
         script += 'profile=' + shlex.quote(requested) + '\nrequested_profile=$profile\n'
-        script += installer.firmware_checks(CATALOG)
+        script += installer.firmware_checks(CATALOG if catalog is None else catalog)
         script += '\nprintf "RESULT:%s:%s:%s:%s\\n" "$profile" "$firmware_bad" "${firmware_wifi_bin:-}" "${firmware_wifi_libs:-}"\n'
         subprocess.run(['sh', '-n'], input=script, text=True, check=True, capture_output=True)
         result = subprocess.run(['sh'], input=script, text=True, check=True, capture_output=True)
@@ -166,6 +166,64 @@ class FirmwareChecks(unittest.TestCase):
             if mode == 'bad-note': pairs[0]['note'] = 'one\ntwo'
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 installer.firmware_checks(catalog)
+
+    def test_issue04_full_component_profile(self):
+        cp = CATALOG['variants'][OVERLAY]['component_profiles'][0]
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(OVERLAY, changed=cp['files'], requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/root/bin:/root/lib:/lib:/usr/lib')
+            self.assertIn('Firmware recognized: ciccia-issue04-original-navigation', output)
+        for path in cp['files']:
+            for value in ('a'*64, None):
+                altered = dict(cp['files']); altered[path] = value
+                with self.subTest(path=path, value=value):
+                    result, _ = self.run_checks(OVERLAY, changed=altered)
+                    self.assertTrue(result.startswith('RESULT:ssh:1:'), result)
+
+    def test_issue04_not_a_cross_base_or_navigation_allowlist(self):
+        cp = CATALOG['variants'][OVERLAY]['component_profiles'][0]
+        pair = {p: cp['files'][p] for p in (APP, NAV)}
+        for base in CATALOG['variants']:
+            if base == OVERLAY:
+                continue
+            result, _ = self.run_checks(base, changed=pair)
+            self.assertTrue(result.startswith('RESULT:ssh:1:'))
+        for nav in ('1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664',
+                    CATALOG['variants'][BASE]['native_pairs'][0]['files'][NAV]):
+            altered = dict(cp['files']); altered[NAV] = nav
+            self.assertTrue(self.run_checks(OVERLAY, changed=altered)[0].startswith('RESULT:ssh:1:'))
+        # An Issue04 app pair on otherwise original Ciccia must not bypass its
+        # distinct daemon and startup checks.
+        self.assertTrue(self.run_checks(OVERLAY, changed=pair)[0].startswith('RESULT:ssh:1:'))
+
+    def test_legacy_decisions_identical_without_issue04_extension(self):
+        legacy = copy.deepcopy(CATALOG)
+        for variant in legacy['variants'].values():
+            variant.pop('component_profiles', None)
+        for name, variant in legacy['variants'].items():
+            pairs = [{}] + [p['files'] for p in variant.get('native_pairs', [])]
+            for pair in pairs:
+                for requested in ('ssh', 'tools', 'full'):
+                    for mutation in ({}, {APP:'a'*64}, {NAV:None}, {'/root/bin/hold380':'b'*64}):
+                        changed = dict(pair); changed.update(mutation)
+                        with self.subTest(name=name, pair=pair, requested=requested, mutation=mutation):
+                            old = self.run_checks(name, changed=changed, requested=requested, catalog=legacy)[0]
+                            new = self.run_checks(name, changed=changed, requested=requested)[0]
+                            self.assertEqual(old, new)
+
+    def test_component_profile_validation(self):
+        for mode in ('missing-file', 'wrong-base', 'bad-path', 'bad-name', 'bad-hash', 'duplicate', 'overlap-native'):
+            c = copy.deepcopy(CATALOG)
+            ps = c['variants'][OVERLAY]['component_profiles']; p = ps[0]
+            if mode == 'missing-file': p['files'].pop('/root/app_server/daemon')
+            if mode == 'wrong-base': p['files']['/dev/mtd2'] = 'a'*64
+            if mode == 'bad-path': p['files']['/tmp/a;false'] = 'a'*64
+            if mode == 'bad-name': p['name'] = 'bad;false'
+            if mode == 'bad-hash': p['files'][APP] = 'bad'
+            if mode == 'duplicate': ps.append(copy.deepcopy(p))
+            if mode == 'overlap-native': p['files'][APP] = c['variants'][OVERLAY]['files'][APP]
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                installer.firmware_checks(c)
 
 if __name__ == '__main__':
     unittest.main()

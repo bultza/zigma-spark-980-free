@@ -17,7 +17,7 @@ int main(void){
   unsigned char code[12]={1,0x4b,0x98,0x6c,0x70,0x47,0,0xbf};put32(code+8,p->base);
   assert(pwrite(fd,code,12,p->getter)==12);word(fd,p->initialized,1);word(fd,p->base+0x48,18);
   unsigned char state[100]={0};assert(pwrite(fd,state,p->status_size,p->status)==(ssize_t)p->status_size);
-  assert(p->clear_supported);assert(p->restore_supported==!strcmp(p->name,"zigma"));
+  assert(p->clear_supported);assert(p->restore_supported==(strcmp(p->name,"puron")!=0));
   assert(map_profile_fd(fd)==p);uint32_t id=0;assert(map_identity_fd(fd,&id)&&id==18);
   unsigned idle[]={1,2,4,30,31};for(size_t j=0;j<5;j++){word(fd,p->status,idle[j]);assert(map_idle_fd(fd));}
   word(fd,p->status,11);assert(!map_idle_fd(fd));word(fd,p->status,31);word(fd,p->status+44,23);assert(!map_idle_fd(fd));word(fd,p->status+44,0);

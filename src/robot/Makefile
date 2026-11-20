@@ -90,3 +90,9 @@ test-navigation-profiles:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_navigation_profiles.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-navigation-profiles
 	build/tests/test-navigation-profiles
+
+.PHONY: test-app-profiles
+test-app-profiles:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_app_profiles.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-app-profiles
+	build/tests/test-app-profiles

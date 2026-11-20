@@ -36,6 +36,8 @@ On the robot now you have a new tool to command your robot. Run these commands i
 | `zigmactl setvolume 0-100` | Sets the speaker volume and waits for confirmation. |
 | `zigmactl reboot` | Restarts the robot using the coordinated sequence above. |
 
+`getvolume` and `setvolume` require a recent observation from Zigma Free. A standalone copy of `zigmactl` on an SSH-only installation can find the control queue while reporting `Current volume unavailable; no change sent`.
+
 The blocking navigation commands default to a 300-second timeout and accept 10 to 3,600 seconds. A successful nonblocking command confirms dispatch. For `goto` and `dock`, check the robot's status to see whether it arrived. The experimental `setheadingblock` command reports that absolute heading control is unsupported and sends no movement.
 
 ## Web interface

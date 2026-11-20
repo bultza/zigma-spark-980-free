@@ -12,7 +12,7 @@ int main(void){
  assert(pwrite(fd,&puron,4,0x4989c)==4);assert(pwrite(fd,&original,4,0x49d5c)==4);
  assert(pwrite(fd,data,sizeof data,puron)==sizeof data);
  uint32_t empty=0;assert(pwrite(fd,&empty,4,original)==4);
- cJSON *p=map(),*o=map();assert(cached_zones_at(p,fd,0x4989c));assert(cached_zones(o,fd));
+ cJSON *p=map(),*o=map();assert(cached_zones_at(p,fd,0x4989c));assert(cached_zones_at(o,fd,0x49d5c));
  assert(cJSON_GetArraySize(get(p,"zones"))==1&&cJSON_GetArraySize(get(o,"zones"))==0);
  cJSON *zone=cJSON_GetArrayItem(get(p,"zones"),0),*point=cJSON_GetArrayItem(get(zone,"points"),0);
  assert(get(point,"x")->valuedouble==11&&get(point,"y")->valuedouble==18);

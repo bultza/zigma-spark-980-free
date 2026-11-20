@@ -80,3 +80,26 @@ Extract the whole archive before running it. Open `install-from-windows.cmd` on 
 The historical V1.0 binaries were built against glibc. The build and packaging steps above produce new musl-based archives. Use a new release label for them.
 
 For existing installations, use `upgrade-from-windows.cmd` or `sh upgrade-from-linux.sh`. See the [upgrade guide](../installer/README.md#upgrade-an-existing-installation).
+
+## Issue04 app-server runtime profile
+
+The exact `8084000b…` app-server has a separate `zigma-issue04` profile in
+`robot/src/zigma_app_profile.h`. The observer hashes the running executable
+and selects status, initialization, volume and zone-cache addresses independently
+of the navigation profile. Executable identity changes invalidate the hash cache.
+Unknown app-server images do not fall through to the original Zigma addresses.
+
+This variant uses the Zigma-family 100-byte status block and classified-zone
+JSON route. Maps additionally verify the profile-specific getter fingerprint.
+Saved-map restoration is enabled for this exact profile after a native round-trip
+with the current map: success acknowledgment, fresh map publication and identical
+restored bytes were verified. Switching to a different map and physical
+relocalization have not been exercised. On Ciccia with
+original navigation, manual deployment verified local IPC, status/settings,
+saved-map listing and the existing navigation LiDAR reader. Physical commands,
+zone edits and cold boot remain unvalidated. RC12 catalogs only the tested Ciccia adaptation with original navigation;
+the original Issue04 navigation remains SSH-only.
+
+Run `make -C src/robot test-app-profiles test-puron-settings test-puron-zones
+test-zone-commands test-map-formats test-map-native test-navigation-profiles`
+from the repository root (as one command) for the relevant offline checks.

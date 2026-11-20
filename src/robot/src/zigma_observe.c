@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include "cJSON.h"
 #include "zigma_timezone.h"
+#include "zigma_app_profile.h"
 
 /* Coexistence adapter: no queue reads or semaphore operations. Optional info-only request. */
 static volatile sig_atomic_t running=1;
@@ -121,9 +122,10 @@ static void remember_map_geometry(cJSON *map){
  cJSON_Delete(map_geometry);map_geometry=cJSON_CreateObject();
  for(const char **k=(const char*[]){"map_id","width","height","map_origin",NULL};*k;k++){cJSON *v=get(map,*k);if(v)cJSON_AddItemToObject(map_geometry,*k,cJSON_Duplicate(v,1));}
 }
-static bool cached_status(cJSON *status,int fd){
+static bool cached_status_profile(cJSON *status,int fd,const struct zigma_app_profile *profile){
+ if(!profile||profile->status_size!=100)return false;
  uint32_t initialized=0,again=0;int32_t a[25],b[25];
- if(!memory_read(fd,0x49d30,&initialized,4)||initialized!=1||!memory_read(fd,0x48e24,a,sizeof(a))||!memory_read(fd,0x48e24,b,sizeof(b))||memcmp(a,b,sizeof(a))||!memory_read(fd,0x49d30,&again,4)||again!=1)return false;
+ if(!memory_read(fd,profile->initialized,&initialized,4)||initialized!=1||!memory_read(fd,profile->status,a,sizeof(a))||!memory_read(fd,profile->status,b,sizeof(b))||memcmp(a,b,sizeof(a))||!memory_read(fd,profile->initialized,&again,4)||again!=1)return false;
  int state=a[0],battery=a[3],area=a[9],minutes=a[10],error=a[11];
  if(!strcmp(vendor_state(state),"unknown")||battery<0||battery>100||area<0||area>100000||minutes<0||minutes>10080||error<0||error>255)return false;
  bool matching=number(status,"vendor_state_code")==state&&number(status,"battery_level")==battery&&number(status,"vendor_clean_area_raw")==area&&number(status,"vendor_clean_time_raw")==minutes&&number(status,"vendor_error_code")==error;
@@ -138,7 +140,7 @@ static bool cached_status(cJSON *status,int fd){
   replace_value(status,"continue_clean",cJSON_CreateBool(a[4]));replace_value(status,"over_ridge",cJSON_CreateBool(a[7]));
  }
  unsigned char volume=255,volume_again=254;
- if(memory_read(fd,0x48f66,&volume,1)&&memory_read(fd,0x48f66,&volume_again,1)&&volume==volume_again&&volume<=100)replace_value(status,"volume",cJSON_CreateNumber(volume));
+ if(memory_read(fd,profile->volume,&volume,1)&&memory_read(fd,profile->volume,&volume_again,1)&&volume==volume_again&&volume<=100)replace_value(status,"volume",cJSON_CreateNumber(volume));
  replace_value(status,"statistics_units_source",cJSON_CreateString("vendor_history_contract"));
  replace_value(status,"telemetry_source",cJSON_CreateString("app_server_cache"));replace_value(status,"cache_read_at",cJSON_CreateNumber(time(NULL)));
  return true;
@@ -153,9 +155,12 @@ static int open_cache(void){
 static void enrich_status(cJSON *status){
  int fd=open_cache();if(fd<0)return;
  bool ok;
- if(puron_settings_process(cache_pid)){
+ const struct zigma_app_profile *profile=zigma_app_profile_process(cache_pid);
+ if(!profile){close(fd);return;}
+ replace_value(status,"app_server_profile",cJSON_CreateString(profile->name));
+ if(!strcmp(profile->name,"puron")){
   ok=cached_puron_status(status,fd);cached_puron_settings(status,fd);
- }else ok=cached_status(status,fd);
+ }else ok=cached_status_profile(status,fd,profile);
  close(fd);if(!ok)return;
  /* Queue activity is link evidence, never a timestamp for this status block. */
  key_t key=ftok("/",15);int q=key==(key_t)-1?-1:msgget(key,0);struct msqid_ds info;
@@ -174,11 +179,11 @@ static bool cached_zones_at(cJSON *map,int fd,uint32_t slot){
   cJSON_AddItemToObject(zone,"points",points);cJSON_AddBoolToObject(zone,"can_clean",type!=2&&type!=3);cJSON_AddBoolToObject(zone,"can_mop",type!=1&&type!=3);cJSON_AddNumberToObject(zone,"id",i+1);cJSON_AddStringToObject(zone,"source","vendor_cache");cJSON_AddItemToArray(zones,zone);
  }replace_value(map,"zones",zones);cJSON_AddBoolToObject(map,"zones_available",true);cJSON_AddNumberToObject(map,"zones_read_at",time(NULL));return true;
 }
-static bool cached_zones(cJSON *map,int fd){return cached_zones_at(map,fd,0x49d5c);}
 static bool enrich_zones(cJSON *map){
  if(!cache_pid){return false;}char file[128];if(!zigma_native_process(cache_pid,"/root/app_server/wifi_app_server_grit"))return false;
  snprintf(file,sizeof(file),"/proc/%d/mem",cache_pid);int fd=open(file,O_RDONLY);if(fd<0)return false;
- bool ok=puron_settings_process(cache_pid)?cached_zones_at(map,fd,0x4989c):cached_zones(map,fd);
+ const struct zigma_app_profile *profile=zigma_app_profile_process(cache_pid);
+ bool ok=profile&&cached_zones_at(map,fd,profile->zones);
  close(fd);return ok;
 }
 /* Configuration replies can replace the full map in SHM. Keep raster/path as

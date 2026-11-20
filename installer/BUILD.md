@@ -209,6 +209,22 @@ SSH. `upgrade-transaction.sh` serializes upgrades with the installer lock, verif
 old/new hashes, replaces files atomically, restarts only managed processes, and
 rolls back if no successful acceptance arrives. No vendor image or private key is
 packaged. Offline transaction tests cover acceptance, rollback and preflight refusal.
+Missing web assets in the five-file upgrade allowlist are recorded as `absent`
+in the transaction manifest, without an invented backup. The worker verifies
+absence before installation; rollback removes a newly added file only when its
+hash still matches the installed payload. Missing binaries remain an error.
+Symlinks, non-regular targets and external changes are rejected or preserved.
+
+Legacy installations may lack `/root/.zigma-install`; the worker creates it with
+private permissions before taking its lock and publishes `failed` on preflight
+errors. Temporary SSH transport failures during state polling are retried within
+the verification deadline, including network-manager restarts. Authentication and
+host-key failures remain fatal. A lost launch response never launches a second
+worker; a lost acceptance response is resolved from `accepted` plus `done`.
+Rollback requests and monitoring also tolerate temporary transport loss, and a
+log-download failure cannot prevent a rollback request. These paths have offline
+regression coverage; this does not establish a successful physical upgrade.
+
 
 `ciccia-hybrid-03-kernel23` separately catalogs the direct five-partition Issue03
 userspace with Ciccia's DTB and kernel #23. Every required file hash was derived
@@ -216,3 +232,27 @@ offline from the verified adapted image. It uses `/root/bin` and
 `/root/lib:/lib:/usr/lib`; the native pair is Puron. This profile is distinct from
 the Issue01b hybrid. Catalog acceptance is tested offline; installation and cold
 boot of RC10 on this hybrid still require a physical test.
+
+### RC12: Issue04 on Ciccia
+
+The overlay kernel23 base contains an isolated full component profile named
+`ciccia-issue04-original-navigation`. Selection first requires the exact
+Issue04 app-server plus original Ciccia navigation pair, then verifies all
+21 required files, including its daemon and S35prepare/S50app/S51hoslam/S60wifi.
+This branch requires an exact ygclient hash too; the existing readable-client
+warning policy remains unchanged in legacy branches. Firmware-profile selection
+and Wi-Fi paths stay independent from runtime memory profiles.
+
+The installer does not replace vendor binaries. Original Issue04 navigation,
+other bases and modified or unreadable components retain SSH-only fallback.
+Existing original/Puron catalog entries are unchanged. Generated-shell tests
+compare legacy decisions with and without the new branch, reject each changed
+or missing Issue04 component, and reject cross-base/native-pair combinations.
+
+The packaged observer selects an exact executable hash before reading native
+memory. Issue04 uses its own status/settings/map/zone addresses; navigation
+continues to use its independent original-Ciccia profile. One configuration
+read initializes the Issue04 zone cache per native-process identity, with no
+periodic zone polling. Native same-map restoration was verified on Ciccia.
+Manual component deployment and a subsequent user reboot were observed;
+this does not establish a physical RC12 installer run on every supported robot.

@@ -4,29 +4,8 @@
 /* Puron app-server 784fbcda: recv_packet copies 96 bytes to 0x48980;
  * system_info_init is 0x49870; voice_volume_get reads 0x48ab4 + 2.
  * Cached state is not a fresh sensor measurement. Channel activity is verified separately. */
-static bool puron_app_hash(const char *hex){
+static inline bool puron_app_hash(const char *hex){
  return !strcmp(hex,"784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912");
-}
-static bool puron_settings_process(int pid){
- static int previous_pid;
- static dev_t device;
- static ino_t inode;
- static bool recognized;
- char path[64];struct stat st;
- snprintf(path,sizeof path,"/proc/%d/exe",pid);
- int fd=open(path,O_RDONLY|O_CLOEXEC);if(fd<0)return false;
- if(fstat(fd,&st)){close(fd);return false;}
- if(previous_pid==pid&&device==st.st_dev&&inode==st.st_ino){close(fd);return recognized;}
- mbedtls_sha256_context ctx;mbedtls_sha256_init(&ctx);
- int rc=mbedtls_sha256_starts(&ctx,0);unsigned char bytes[16384],digest[32];ssize_t n=0;
- while(!rc&&(n=read(fd,bytes,sizeof bytes))>0)rc=mbedtls_sha256_update(&ctx,bytes,(size_t)n);
- if(n<0)rc=1;
- if(!rc)rc=mbedtls_sha256_finish(&ctx,digest);
- mbedtls_sha256_free(&ctx);close(fd);
- if(rc)return false;
- char hex[65];for(unsigned i=0;i<32;i++)snprintf(hex+2*i,3,"%02x",digest[i]);
- previous_pid=pid;device=st.st_dev;inode=st.st_ino;recognized=puron_app_hash(hex);
- return recognized;
 }
 static bool cached_puron_settings(cJSON *status,int fd){
  uint32_t initialized=0,again=0;int32_t a[24],b[24];unsigned char volume=255,check=254;

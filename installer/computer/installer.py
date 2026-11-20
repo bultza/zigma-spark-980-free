@@ -134,7 +134,7 @@ verify_firmware_files() {
   esac
   if test "$actual" = "$expected"; then
    echo "Firmware PASS: $path SHA256=$actual"
-  elif test "$path" = /root/yg/ygclient && test "${#actual}" -eq 64 &&
+  elif test "${firmware_strict:-0}" = 0 && test "$path" = /root/yg/ygclient && test "${#actual}" -eq 64 &&
        case "$actual" in *[!0-9a-f]*) false;; *) true;; esac; then
    echo "Firmware WARNING: $path has unknown SHA-256 $actual (expected $expected)" >&2
   else
@@ -168,9 +168,39 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
         selectors.add(selector)
         lines += [selector + ')', ' firmware_variant=' + shlex.quote(name),
                   ' firmware_wifi_bin=' + shlex.quote(wifi_bin),
-                  ' firmware_wifi_libs=' + shlex.quote(wifi_libs),
-                  " verify_firmware_files <<'ZIGMA_REVIEWED_FIRMWARE'"]
+                  ' firmware_wifi_libs=' + shlex.quote(wifi_libs)]
         native_paths = ('/root/app_server/wifi_app_server_grit', '/root/hoslam/demo_rplidar')
+        component_profiles = variant.get('component_profiles', [])
+        if not isinstance(component_profiles, list):
+            raise ValueError('Invalid component profiles')
+        if component_profiles:
+            lines += [' component_app_sha=$(firmware_digest ' + native_paths[0] + ') || component_app_sha=',
+                      ' component_nav_sha=$(firmware_digest ' + native_paths[1] + ') || component_nav_sha=',
+                      ' case "$component_app_sha:$component_nav_sha" in']
+            occupied = {':'.join(files[path] for path in native_paths)}
+            occupied.update(':'.join(pair['files'][path] for path in native_paths)
+                            for pair in variant.get('native_pairs', []))
+            component_names = set(catalog['variants'])
+            for component in component_profiles:
+                cf, cn, note = component['files'], component['name'], component['note']
+                if (not re.fullmatch(r'[A-Za-z0-9_-]+', cn) or cn in component_names
+                        or not set(files).issubset(cf)
+                        or any(not re.fullmatch(path_pattern, path) or not re.fullmatch(r'[a-f0-9]{64}', digest)
+                               for path, digest in cf.items())
+                        or any(cf[path] != files[path] for path in ('/dev/mtd1', '/dev/mtd2', '/dev/mtd3'))
+                        or not isinstance(note, str) or not note or any(ord(ch) < 32 for ch in note)):
+                    raise ValueError('Invalid component profile')
+                cs = ':'.join(cf[path] for path in native_paths)
+                if cs in occupied:
+                    raise ValueError('Duplicate component profile selector')
+                occupied.add(cs); component_names.add(cn)
+                lines += [' ' + cs + ')', '  firmware_variant=' + shlex.quote(cn),
+                          '  firmware_strict=1', "  verify_firmware_files <<'ZIGMA_COMPONENT_FIRMWARE'"]
+                lines.extend(f'{digest} {path}' for path, digest in cf.items())
+                lines += ['ZIGMA_COMPONENT_FIRMWARE', '  firmware_strict=0',
+                          '  echo ' + shlex.quote('Firmware NOTE: ' + note), '  ;;']
+            lines += [' *)']
+        lines += [" verify_firmware_files <<'ZIGMA_REVIEWED_FIRMWARE'"]
         pairs = variant.get('native_pairs', [])
         if not isinstance(pairs, list):
             raise ValueError('Invalid native firmware pairs')
@@ -210,6 +240,8 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
                       '  echo "Native firmware UNKNOWN: app-server=${native_app_sha:-UNREADABLE} navigation=${native_nav_sha:-UNREADABLE}" >&2',
                       '  ;;', ' esac',
                       ' echo "Native firmware: $firmware_native_variant"']
+        if component_profiles:
+            lines += [' ;;', ' esac']
         lines += [' ;;']
     lines += ["""*)
  firmware_bad=1

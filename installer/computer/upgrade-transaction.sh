@@ -22,9 +22,21 @@ checkpath() {
  case "$path" in
  /root/bin/zigmactl|/root/zigma-free/*) :;; *) return 1;; esac
  case "$path" in *..*|*[!a-zA-Z0-9/._-]*) return 1;; esac
- test -f "$path" && test ! -L "$path"
+ test ! -L "$path" || return 1
+ if test "$oldsha" = absent; then
+  case "$path" in
+   "$base/src/app.js"|"$base/src/index.html"|"$base/src/style.css"|"$base/src/nor.js"|"$base/src/favicon.svg") :;;
+   *) return 1;;
+  esac
+  test ! -e "$path" || test -f "$path" || return 1
+ else
+  test -f "$path" || return 1
+ fi
  parent=$(dirname "$path")
- while test "$parent" != /; do test ! -L "$parent" || return 1; parent=$(dirname "$parent"); done
+ while test "$parent" != /; do test -d "$parent" && test ! -L "$parent" || return 1; parent=$(dirname "$parent"); done
+}
+current_sha() {
+ if test -f "$path"; then sha "$path"; else echo absent; fi
 }
 restart_daemon() {
  case "$path" in
@@ -51,10 +63,14 @@ replace_files() {
  cmp -s "$stage/native.before" "$stage/native.current" || return 1
  while read -r index path oldmode newmode oldsha newsha; do
   checkpath || return 1
-  actual=$(sha "$path")
+  actual=$(current_sha)
   test "$actual" = "$oldsha" || test "$actual" = "$newsha" || return 1
   if test "$direction" = new; then expected=$newsha; mode=$newmode; else expected=$oldsha; mode=$oldmode; fi
   if test "$actual" != "$expected"; then
+   if test "$expected" = absent; then
+    rm "$path" || return 1
+    continue
+   fi
    gzip -dc "$stage/$index.$direction.gz" > "$path.zigma-upgrade-new" || return 1
    test "$(sha "$path.zigma-upgrade-new")" = "$expected" || return 1
    chmod "$mode" "$path.zigma-upgrade-new" || return 1
@@ -82,6 +98,14 @@ case "$action" in
   echo accepted > "$stage/state"
  ;;
  run)
+  # Publish preflight failures even when set -e exits before the first write.
+  echo starting > "$stage/state"
+  trap 'rc=$?; if test "$rc" -ne 0 && test "$(cat "$stage/state" 2>/dev/null)" = starting; then echo failed > "$stage/state"; fi' 0
+  test ! -L /root/.zigma-install
+  mkdir -p /root/.zigma-install
+  test -d /root/.zigma-install
+  test ! -L /root/.zigma-install/lock
+  test ! -d /root/.zigma-install/lock
   exec 9>/root/.zigma-install/lock
   flock -n 9 || { echo failed > "$stage/state"; exit 1; }
   test ! -e /root/.zigma-install/pending
@@ -91,9 +115,11 @@ case "$action" in
   # Validate every original and both compressed versions before the first write.
   while read -r index path oldmode newmode oldsha newsha; do
    checkpath
-   test "$(sha "$path")" = "$oldsha"
+   test "$(current_sha)" = "$oldsha"
    test ! -e "$path.zigma-upgrade-new" && test ! -L "$path.zigma-upgrade-new"
-   test "$(gzip -dc "$stage/$index.old.gz" | sha256sum | cut -d ' ' -f1)" = "$oldsha"
+   if test "$oldsha" != absent; then
+    test "$(gzip -dc "$stage/$index.old.gz" | sha256sum | cut -d ' ' -f1)" = "$oldsha"
+   fi
    test "$(gzip -dc "$stage/$index.new.gz" | sha256sum | cut -d ' ' -f1)" = "$newsha"
   done < "$stage/files.list"
   echo installing > "$stage/state"

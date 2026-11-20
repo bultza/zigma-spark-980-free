@@ -1,10 +1,12 @@
+#include "zigma_app_profile.h"
 /* Exact get_map_id fingerprints include the cache-base literal. Puron
  * 784fbcda: get_map_id 0x21d40 -> 0x48f6c + 0x48; recv_packet uses
  * 96 bytes at 0x48980 and system_info_init at 0x49870. */
 struct map_native_profile {const char *name;uint32_t getter,base,initialized,status;size_t status_size;bool restore_supported,clear_supported;};
 static const struct map_native_profile map_profiles[]={
  {"zigma",0x22714,0x4941c,0x49d30,0x48e24,100,true,true},
- {"puron",0x21d40,0x48f6c,0x49870,0x48980,96,false,true}
+ {"puron",0x21d40,0x48f6c,0x49870,0x48980,96,false,true},
+ {"zigma-issue04",0x22ea0,0x4a248,0x4ab5c,0x49c44,100,true,true}
 };
 static const struct map_native_profile *map_profile_fd(int fd){
  const unsigned char prefix[]={1,0x4b,0x98,0x6c,0x70,0x47,0,0xbf};
@@ -15,7 +17,9 @@ static const struct map_native_profile *map_profile_fd(int fd){
 }
 static int native_map_fd(const char *pidtext){
  uint32_t pid;if(!map_id(pidtext,&pid)||pid<2||!zigma_native_process((int)pid,"/root/app_server/wifi_app_server_grit"))return -1;
- char path[80];snprintf(path,sizeof path,"/proc/%u/mem",pid);return open(path,O_RDONLY|O_CLOEXEC);
+ const struct zigma_app_profile *profile=zigma_app_profile_process((int)pid);if(!profile)return -1;
+ char path[80];snprintf(path,sizeof path,"/proc/%u/mem",pid);int fd=open(path,O_RDONLY|O_CLOEXEC);
+ if(fd>=0){const struct map_native_profile *mp=map_profile_fd(fd);if(!mp||strcmp(mp->name,profile->name)){close(fd);return -1;}}return fd;
 }
 static bool map_initialized(int fd,const struct map_native_profile *p){unsigned char b[4];return p&&pread(fd,b,4,p->initialized)==4&&u32(b)==1;}
 static bool map_identity_fd(int fd,uint32_t *id){

@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.5 (packaged 2026-11-16T22:12:39+00:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.7 (packaged 2026-11-20T00:00:00+01:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Persistent own runtime; telemetry, demand markers and process logs remain in RAM.
@@ -85,7 +85,7 @@ case "${1:-}" in
   case "$1" in repair-web) stop_one agent;;repair-observer) stop_one observe;;esac
   cleanup_orphans agent
   cleanup_orphans observe
-  if native_ids && alive agent && alive observe && test "$native_key" = "$(cat "$ram/native.identity" 2>/dev/null || true)";then exit 0;fi
+  if native_ids && alive agent && alive observe && test "$native_key" = "$(cat "$ram/native.identity" 2>/dev/null || true)" && test "$native_key" = "$(cat "$ram/zones-request.identity" 2>/dev/null || true)";then exit 0;fi
   i=0
   while :; do
    app_pid=$(pidof wifi_app_server_grit || true)
@@ -96,12 +96,12 @@ case "${1:-}" in
   test "/proc/$app_pid/exe" -ef /root/app_server/wifi_app_server_grit
   test "/proc/$nav_pid/exe" -ef /root/hoslam/demo_rplidar
   # Recognize both app-server builds; protocol and memory compatibility are separate.
-  case "$(sha256sum /root/app_server/wifi_app_server_grit | cut -d ' ' -f 1)" in
-   4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a|784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912) :;;
+  case "$(sha256sum /proc/$app_pid/exe | cut -d ' ' -f 1)" in
+   4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a|784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912|8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c) :;;
    *) exit 1;;
   esac
   # Recognize both navigation builds; memory layout checks remain in the observer.
-  case "$(sha256sum /root/hoslam/demo_rplidar | cut -d ' ' -f 1)" in
+  case "$(sha256sum /proc/$nav_pid/exe | cut -d ' ' -f 1)" in
    b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255|6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8) :;;
    *) exit 1;;
   esac
@@ -118,6 +118,13 @@ case "${1:-}" in
   "$base/zigma-cron" ensure 6>&-
   nohup nice -n 10 "$base/free-zigma-agent-arm" --listen 0.0.0.0 --name "$robot_name" --mode commands --telegram-curl "$base/zigma-curl-arm" --telegram-ca "$base/telegram-ca.pem" --control-bin /root/bin/zigmactl --zones-bin "$base/zigma-zones-arm" --area-bin "$base/zigma-area-arm" --settings-bin "$base/zigma-settings" --options-bin "$base/zigma-options-arm" --voices-dir /root/voice --ssh-keys-file /root/.ssh/authorized_keys --maps-bin "$base/zigma-maps-arm" --maps-dir /root/hoslam --map-library-dir /root/zigma-free-master-maps --maps-app-pid "$app_pid" --status-file "$ram/observation/status.json" --map-file "$ram/observation/map.json" --data-dir "$base/data" --core-records-dir "$base/data/core-records" --web-dir "$base/src" --port 8765 --cron-dir /root/etc/crontabs --crontab-bin /usr/bin/crontab --cron-helper "$base/zigma-cron" >"$ram/agent.log" 2>&1 </dev/null 6>&- &
   identity agent "$!"
+  fi
+  # One configuration read per native process identity, never periodic polling.
+  # Issue04 does not populate the zone cache on its own at startup.
+  if test "$native_key" != "$(cat "$ram/zones-request.identity" 2>/dev/null || true)";then
+   if test "$(sha256sum /proc/$app_pid/exe | cut -d ' ' -f 1)" != 8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c || "$base/zigma-zones-arm" --refresh-cache;then
+    printf '%s\n' "$native_key" >"$ram/zones-request.identity"
+   fi
   fi
   # nice/exec may take longer than one second on a busy robot.
   i=0

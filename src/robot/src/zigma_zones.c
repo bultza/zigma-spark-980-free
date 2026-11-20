@@ -15,7 +15,7 @@
 /* Exact running-image profiles. Queue receivers may be thread IDs. */
 static int zones_profile_hash(const char *hash){
  if(!strcmp(hash,"784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912"))return 2;
- if(!strcmp(hash,"4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a"))return 1;
+ if(!strcmp(hash,"4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a")||!strcmp(hash,"8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c"))return 1;
  return 0;
 }
 /* Exact known navigation images; Puron enabled for user validation. */
@@ -69,9 +69,21 @@ static int zones_send(int profile,int q,cJSON *zones,const char *payload){
  }return 0;
 }
 
+/* Read configuration once at startup. Type16 never replaces zones; original
+ * navigation replies with type17, which initializes the native app cache. */
+static int zones_refresh_cache(void){
+ key_t ak=ftok("/",1),nk=ftok("/",14);if(ak==(key_t)-1||nk==(key_t)-1)return 1;
+ int aq=msgget(ak,0),nq=msgget(nk,0);char app[65],nav[65];
+ if(aq<0||nq<0||!zones_receiver_hash(aq,"/root/app_server/wifi_app_server_grit",app)||!zones_profile_hash(app)||!zones_receiver_hash(nq,"/root/hoslam/demo_rplidar",nav)||!zones_navigation_hash(nav))return 1;
+ struct {long type;unsigned char text[4096];} message={16,{0}};
+ if(msgsnd(nq,&message,sizeof message.text,IPC_NOWAIT)){perror("Configuration read not dispatched");return 1;}
+ return 0;
+}
+
 /* An explicit JSON argument; never a shell command or an IPC consumer. */
 int main(int argc,char **argv){
  if(zigma_version_only(argc,argv,"zigma-zones-arm"))return 0;
+ if(argc==2&&!strcmp(argv[1],"--refresh-cache"))return zones_refresh_cache();
  int dry=argc==3&&!strcmp(argv[1],"--dry-run");if(argc!=(dry?3:2))return 2;
  const char *end; cJSON *o=cJSON_ParseWithOpts(argv[dry?2:1],&end,1);if(!o)return 2;
  cJSON *zones=cJSON_GetObjectItemCaseSensitive(o,"forbidden_zone_info");int valid=cJSON_IsObject(o)&&cJSON_GetArraySize(o)==3&&cJSON_IsArray(zones)&&cJSON_GetArraySize(zones)<=12;

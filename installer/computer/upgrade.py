@@ -85,6 +85,27 @@ def select_connection(session):
     return host, path, pin
 
 
+# Only transport failures are retryable; authentication and host identity stay fatal.
+TRANSPORT_ERRORS = (OSError, EOFError, paramiko.SSHException)
+
+
+def reconnect_command(robot, command, deadline, **kwargs):
+    while True:
+        try:
+            return robot.command(command, **kwargs)
+        except (paramiko.AuthenticationException, paramiko.BadHostKeyException):
+            raise
+        except TRANSPORT_ERRORS:
+            if time.monotonic() >= deadline:
+                raise
+            print('SSH temporarily unavailable; waiting for the robot to reconnect.')
+            time.sleep(min(3, max(0, deadline-time.monotonic())))
+
+
+def transaction_state(robot, stage, deadline):
+    return reconnect_command(robot, 'cat '+stage+'/state 2>/dev/null || echo starting', deadline)
+
+
 def read_bytes(robot, command, limit=16*1024*1024):
     with connect(robot) as client:
         stdin, stdout, stderr = client.exec_command(command, timeout=60)
@@ -203,16 +224,25 @@ def upgrade(session=None):
     # Keep only changed files; old bytes and permissions are verified again before replacement.
     for path, (data, mode) in files.items():
         q = shlex.quote(path)
-        robot.command('test -f '+q+' && test ! -L '+q)
-        before, previous_mode = read_file(robot, path)
-        if before == data:
-            continue
+        presence = robot.command('test ! -L '+q+' && { if test -f '+q+'; then echo present; '
+                                 'elif test ! -e '+q+'; then echo absent; else exit 1; fi; }')
         index = str(len(listing))
-        before_zip = gzip.compress(before, mtime=0)
-        (directory/(index+'.old.gz')).write_bytes(before_zip)
-        backups[index] = before_zip
+        if presence == 'absent':
+            if path not in {BASE+'/src/'+name for name in WEB_NAMES}:
+                raise ValueError('Required installed component is missing: '+path)
+            previous_mode, previous_sha = '-', 'absent'
+        elif presence == 'present':
+            before, previous_mode = read_file(robot, path)
+            if before == data:
+                continue
+            previous_sha = installer.digest(before)
+            before_zip = gzip.compress(before, mtime=0)
+            (directory/(index+'.old.gz')).write_bytes(before_zip)
+            backups[index] = before_zip
+        else:
+            raise ValueError('Invalid file presence result: '+path)
         changed[index] = gzip.compress(data, mtime=0)
-        listing.append(f'{index} {path} {previous_mode} {mode:o} {installer.digest(before)} {installer.digest(data)}')
+        listing.append(f'{index} {path} {previous_mode} {mode:o} {previous_sha} {installer.digest(data)}')
     if not listing:
         print('All binaries and web assets already match this package. No robot files changed.')
         return
@@ -246,12 +276,25 @@ def upgrade(session=None):
         idle(robot)
         print('Installing. Keep the robot powered; disconnection triggers rollback after 240 seconds.')
         started = True  # Ambiguous SSH response must never cause a second transaction launch.
-        robot.command('nohup sh '+stage+'/transaction.sh '+stage+' run >'+stage+'/transaction.log 2>&1 </dev/null &', timeout=10)
         deadline = time.monotonic()+180
+        try:
+            robot.command('nohup sh '+stage+'/transaction.sh '+stage+' run >'+stage+'/transaction.log 2>&1 </dev/null &', timeout=10)
+        except (paramiko.AuthenticationException, paramiko.BadHostKeyException):
+            raise
+        except TRANSPORT_ERRORS:
+            print('Launch response lost; checking the existing transaction without launching it again.')
+        acceptance_attempted = False
         while time.monotonic() < deadline:
-            state = robot.command('cat '+stage+'/state 2>/dev/null || echo starting')
+            state = transaction_state(robot, stage, deadline)
             if state in ('rolled-back', 'rollback-failed', 'failed'):
                 raise ValueError('Upgrade transaction: '+state)
+            if state == 'accepted' and acceptance_attempted:
+                if reconnect_command(robot, 'test -f '+stage+'/done && echo done || echo waiting', deadline) != 'done':
+                    time.sleep(1)
+                    continue
+                (directory/'verified.json').write_text(json.dumps({'host': host, 'boot': boot, 'files': listing}, indent=2)+'\n')
+                print('Upgrade verified. Backups retained: '+str(directory))
+                return
             if state == 'ready':
                 try:
                     robot.command('test "$(cat /proc/sys/kernel/random/boot_id)" = '+shlex.quote(boot)+' && '+BASE+'/zigma-free-service status && '+
@@ -263,6 +306,7 @@ def upgrade(session=None):
                     expected = {row['name']: row for row in old['items'] if row['kind'] == 'binary'}
                     if any(rows.get(n, {}).get('sha256') != row['sha256'] or rows[n].get('status') != 'verified' for n, row in expected.items()):
                         raise ValueError('About inventory not yet verified')
+                    acceptance_attempted = True
                     robot.command('sh '+stage+'/transaction.sh '+stage+' accept', timeout=15)
                     for _ in range(15):
                         if robot.command('test -f '+stage+'/done && echo done || echo waiting') == 'done':
@@ -273,22 +317,27 @@ def upgrade(session=None):
                     (directory/'verified.json').write_text(json.dumps({'host': host, 'boot': boot, 'files': listing}, indent=2)+'\n')
                     print('Upgrade verified. Backups retained: '+str(directory))
                     return
-                except (OSError, ValueError, RuntimeError, paramiko.SSHException):
-                    pass
+                except (paramiko.AuthenticationException, paramiko.BadHostKeyException):
+                    raise
+                except (OSError, EOFError, ValueError, RuntimeError, paramiko.SSHException) as exc:
+                    print('Verification not complete ('+type(exc).__name__+'); retrying within the upgrade deadline.')
             time.sleep(3)
         raise ValueError('Upgrade verification timed out')
     finally:
         if started:
             try:
-                (directory/'transaction.log').write_bytes(read_bytes(robot, 'cat '+stage+'/transaction.log'))
                 if (directory/'verified.json').exists():
+                    try:
+                        (directory/'transaction.log').write_bytes(read_bytes(robot, 'cat '+stage+'/transaction.log'))
+                    except TRANSPORT_ERRORS:
+                        print('Verified upgrade; transaction log could not be downloaded.')
                     robot.command('rm -rf '+stage)
                 else:
-                    robot.command('touch '+stage+'/rollback.now')
-                    print('Rollback requested. Keep power on; evidence retained at '+stage)
                     deadline = time.monotonic()+270
+                    reconnect_command(robot, 'touch '+stage+'/rollback.now', deadline)
+                    print('Rollback requested. Keep power on; evidence retained at '+stage)
                     while time.monotonic() < deadline:
-                        state = robot.command('cat '+stage+'/state 2>/dev/null || echo starting')
+                        state = transaction_state(robot, stage, deadline)
                         if state in ('rolled-back', 'rollback-failed', 'failed', 'accepted'):
                             print('Final transaction state: '+state)
                             (directory/'transaction-state.txt').write_text(state+'\n')
@@ -298,6 +347,6 @@ def upgrade(session=None):
                     else:
                         print('Rollback completion is not confirmed; retain the session and robot power.')
             except Exception:
-                print('Connection unavailable. Independent rollback remains armed. Keep power on. Session: '+str(directory))
+                print('Transaction outcome could not be confirmed. Keep power on and retain the session: '+str(directory))
         else:
             robot.command('rm -rf '+stage)
