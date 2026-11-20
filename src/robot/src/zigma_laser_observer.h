@@ -7,30 +7,13 @@ static bool laser_have=false,laser_was_active=false;
 static long long laser_changed=0,laser_attempt=0,laser_next_sample=0;
 static unsigned laser_sequence=0;
 static cJSON *laser_pose=NULL;
-/* Exact executable allowlist plus an independently guarded memory profile. */
-static bool laser_hash_allowed(const char *hex){
- return !strcmp(hex,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255")||
-        !strcmp(hex,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8");
-}
-static bool laser_hash(pid_t pid){
- char p[64],hex[65];snprintf(p,sizeof p,"/proc/%ld/exe",(long)pid);
- int fd=open(p,O_RDONLY|O_CLOEXEC);if(fd<0)return false;
- mbedtls_sha256_context c;mbedtls_sha256_init(&c);int rc=mbedtls_sha256_starts(&c,0);unsigned char buf[16384],hash[32];ssize_t n=0;
- while(!rc&&(n=read(fd,buf,sizeof buf))>0)rc=mbedtls_sha256_update(&c,buf,(size_t)n);
- if(n<0)rc=-1;
- if(!rc)rc=mbedtls_sha256_finish(&c,hash);
- mbedtls_sha256_free(&c);close(fd);
- if(rc)return false;
- for(int i=0;i<32;i++)snprintf(hex+i*2,3,"%02x",hash[i]);
- return laser_hash_allowed(hex);
-}
-static bool laser_copy(int fd,float *a){
- const struct navigation_profile *profile=navigation_profile_fd(fd);float b[360];if(!profile)return false;
+static bool laser_copy(int fd,float *a,const struct navigation_profile *expected){
+ const struct navigation_profile *profile=navigation_profile_fd(fd,expected);float b[360];if(!profile)return false;
  for(int j=0;j<3;j++){
   if(!memory_read(fd,profile->base+4,a,sizeof b)||!memory_read(fd,profile->base+4,b,sizeof b))return false;
   if(memcmp(a,b,sizeof b))continue;
   for(int i=0;i<360;i++)if(!isfinite(a[i])||a[i]<0||a[i]>100)return false;
-  return navigation_profile_fd(fd)==profile;
+  return navigation_profile_fd(fd,expected)==profile;
  }return false;
 }
 static void laser_close(void){if(laser_fd>=0)close(laser_fd);laser_fd=-1;laser_ticks=0;laser_have=false;laser_changed=0;laser_sequence=0;cJSON_Delete(laser_pose);laser_pose=NULL;}
@@ -54,17 +37,18 @@ static bool laser_tick(const char *dir,long long now){
  laser_was_active=true;
  if(now<laser_next_sample)return true;
  laser_next_sample=now+2000;
+ const struct navigation_profile *profile=navigation_profile_process(nav_pid);
  unsigned long long ticks=zigma_start_ticks(nav_pid);
  if(laser_fd>=0&&(!ticks||ticks!=laser_ticks))laser_close();
  if(laser_fd<0&&now-laser_attempt>=3000){
   laser_attempt=now;char p[64];
-  if(ticks&&zigma_native_process(nav_pid,"/root/hoslam/demo_rplidar")&&laser_hash(nav_pid)&&ticks==zigma_start_ticks(nav_pid)){
+  if(ticks&&zigma_native_process(nav_pid,"/root/hoslam/demo_rplidar")&&profile&&ticks==zigma_start_ticks(nav_pid)){
    snprintf(p,sizeof p,"/proc/%d/mem",nav_pid);laser_fd=open(p,O_RDONLY|O_CLOEXEC);laser_ticks=ticks;
   }
  }
- cJSON *pose_before=laser_fd>=0?cached_navigation_pose(laser_fd,map_geometry):NULL;
- float values[360];bool ok=laser_fd>=0&&laser_copy(laser_fd,values)&&laser_ticks==zigma_start_ticks(nav_pid);
- cJSON *pose_after=ok?cached_navigation_pose(laser_fd,map_geometry):NULL;
+ cJSON *pose_before=laser_fd>=0?cached_navigation_pose(laser_fd,map_geometry,profile):NULL;
+ float values[360];bool ok=laser_fd>=0&&laser_copy(laser_fd,values,profile)&&laser_ticks==zigma_start_ticks(nav_pid);
+ cJSON *pose_after=ok?cached_navigation_pose(laser_fd,map_geometry,profile):NULL;
  bool pose_ok=pose_before&&pose_after&&fabs(get(pose_before,"heading")->valuedouble-get(pose_after,"heading")->valuedouble)<0.01;
  cJSON *o=cJSON_CreateObject();cJSON_AddBoolToObject(o,"available",ok);
  cJSON_AddNumberToObject(o,"read_monotonic_ms",now);cJSON_AddNumberToObject(o,"observer_pid",getpid());cJSON_AddNumberToObject(o,"observer_start_ticks",(double)zigma_start_ticks(getpid()));

@@ -38,3 +38,13 @@ class ZoneCacheStartup(unittest.TestCase):
     def test_failure_does_not_publish_success_marker(self):
         calls,marker=self.check_runs(ISSUE04,['1:10:2:20'],fail=True)
         self.assertEqual(calls,['--refresh-cache']);self.assertIsNone(marker)
+
+    def test_native_hash_gate_accepts_both_issue04_combinations(self):
+        text = SERVICE.read_text()
+        block = text[text.index('  # Recognize reviewed app-server'):text.index('  native_ids', text.index('  # Recognize reviewed app-server'))]
+        russian='1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664'
+        ciccia='b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255'
+        for nav in (russian, ciccia, 'unknown'):
+            script='set -eu\napp_pid=1\nnav_pid=2\nsha256sum() { case "$1" in /proc/1/exe) echo '+ISSUE04+';; *) echo '+nav+';; esac; }\n'+block
+            result=subprocess.run(['sh'],input=script,text=True,capture_output=True)
+            self.assertEqual(result.returncode, 1 if nav=='unknown' else 0)

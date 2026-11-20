@@ -256,3 +256,13 @@ read initializes the Issue04 zone cache per native-process identity, with no
 periodic zone polling. Native same-map restoration was verified on Ciccia.
 Manual component deployment and a subsequent user reboot were observed;
 this does not establish a physical RC12 installer run on every supported robot.
+
+## Original Russian Issue04/Issue06 and Ciccia hybrid update
+
+This build extends the RC12 checkout, preserving earlier profiles. It recognizes original Russian navigation `1b2751ef…` with app `8084000b…`, its exact RTL8723DS module and startup scripts. The separate Ciccia hybrid retains navigation `b10fc7b4…` and 8189fs. No vendor binaries, radio modules or calibration values are replaced by the installer.
+
+`replace_module_checks` changes only the module path checked by the catalogue, never a file on the robot. All other required checks remain strict. For the original Russian S51hoslam only, an exact normalized template also accepts different numeric values in the ten documented calibration exports. Shell statements, other settings, missing lines and nonnumeric additions are not ignored. This accommodates individual robot calibration without broad acceptance of arbitrary init scripts.
+
+Observer V1.17 supports the independently traced Russian scan/pose layout, zones V1.6 supports its configuration query, and service V1.8 accepts the native navigation hash. Static disassembly establishes dispatcher type16 at 0x76faa, handler 0x77e20 and type17 response at 0x77e60. Original navigation and Wi-Fi remain on the original robot; Ciccia's adapted pair remains separate.
+
+Offline acceptance, negative catalogue tests, navigation/map/zone regressions and ARM builds are required. Physical installation, live LiDAR/pose, no-go editing and map restoration on the original Russian robot remain user validation items. Issue06 has confirmed the same native binary hashes and RTL8723DS identification, not all other hashes; unexpected base or script differences still retain SSH-only with diagnostics. Existing packaged RC11/RC12 archives are not overwritten.

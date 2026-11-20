@@ -103,3 +103,7 @@ the original Issue04 navigation remains SSH-only.
 Run `make -C src/robot test-app-profiles test-puron-settings test-puron-zones
 test-zone-commands test-map-formats test-map-native test-navigation-profiles`
 from the repository root (as one command) for the relevant offline checks.
+
+### Issue04 original navigation reader
+
+Observer V1.17 selects the passive navigation layout by the exact running executable hash. Russian navigation `1b2751ef…` uses singleton slot `0x4687a4`, object `0x47e440`, vtable `0x45f544`, and pose block `+0x112c`; Zigma/Puron retain `+0x1120`. Scan and map geometry offsets remain `+4` and `+0xe44`. The Russian layout is statically traced and covered by synthetic regression fixtures; runtime validation on that navigation build is pending. The subsequent Issue04 installer update enables this exact original pair with its RTL8723DS module and reviewed scripts, alongside the Ciccia hybrid. Zones V1.6 allows its reviewed type16/type17 configuration query. Physical validation of the original robot remains pending.

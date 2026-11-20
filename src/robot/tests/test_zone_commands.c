@@ -8,6 +8,8 @@ int zone_test_msgsnd(int q,const void *msg,size_t size,int flags){assert(q==123&
 static uint32_t word(unsigned char *p){uint32_t n;memcpy(&n,p,4);return n;}
 static float real(unsigned char *p){float n;memcpy(&n,p,4);return n;}
 int main(void){
+ assert(zones_navigation_hash("1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664"));assert(!zones_navigation_hash("unknown"));
+
  unsigned char message[4096];
  /* Expected bytes follow native type6 receiver: length/count/type/x/-y.
   * Unequal signed coordinates expose axis swaps and incorrect scaling. */

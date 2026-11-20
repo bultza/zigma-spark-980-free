@@ -104,6 +104,37 @@
             "/root/etc/init.d/S60wifi": "5cf0aa6cceea02072b2c14884391372868c220caa230ecfb911455aa051d5af5"
           },
           "note": "Issue04 userspace adapted to Ciccia with original Ciccia navigation. Manual local-mode, zones and same-map restoration verified. Original Issue04 navigation remains unreviewed."
+        },
+        {
+          "name": "issue04-russian-original",
+          "replace_module_checks": {
+            "/root/modules/8189fs.ko": "/root/firmware/arobot/modules/8723ds.ko"
+          },
+          "files": {
+            "/dev/mtd1": "0ed7dd1f94706b4202101727c57a4f5a9c966559078c89f7f37ced7115ad3b3b",
+            "/dev/mtd2": "0e912343ba5e0ce27e302c3b98b0755540be6c503838d6bf8cca0633d2300d3c",
+            "/dev/mtd3": "84f570dfc1bcdf115e7e009025861a5c2b0a72be6d6315b28a1828e50fcc065f",
+            "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+            "/bin/busybox": "101dbf222f6ba88368242e9ce8f83ea90aa3b114772ac3ab70bb0a71c73cbccf",
+            "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+            "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+            "/root/yg/ygclient": "2bc882825a5d8d56286f5f792add41a842593d292ee059317ff2d3fbc8c95d2e",
+            "/root/app_server/daemon": "a0a587b633a184010c904a5e58de21039b893bafd06af40a7c9000548b5aeebc",
+            "/root/app_server/wifi_app_server_grit": "8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c",
+            "/root/hoslam/demo_rplidar": "1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664",
+            "/root/bin/wpa_supplicant": "45b23ee81401f80def60690441d2afb0c18e8d2c27240452b938e1c1ee45f22c",
+            "/root/lib/libnl.so.1": "9ab8d584e5f3205f24dcaaed049a562183801741f22206650df5d43f3611cb53",
+            "/root/bin/hold380": "8a5a2538c5b21b6916867b2ea4173d45b2a1d9fafbcc16e1f66eb37f7f536e58",
+            "/root/etc/init.d/S70yg": "4763d5eb69652f338f6abf29e92da90753893819b339ea3bf48414a864ea800d",
+            "/root/etc/init.d/S99daemon": "09569de87689f48f4d4ea62d2055588d4b1f8bb783acd375bd1801694885f612",
+            "/root/etc/init.d/S35prepare": "45978edb827d6d9a6599e0a7623e2a436af5b1a8e88d80de269ce2c1770331d5",
+            "/root/etc/init.d/S50app": "07c8aa36ce74e8f8571eeac5c7002d3161f197ccc0b91ceafd79a079bc24699a",
+            "/root/etc/init.d/S51hoslam": "7805c5c4b9915d580aca1f192bb9eb6ac22cf547d71cf8d3444f255158791987",
+            "/root/etc/init.d/S60wifi": "caec448ba14a2849218f900e6dbca87000e7a6ce79e2b3253ee251c9644a450f",
+            "/root/firmware/arobot/modules/8723ds.ko": "7458199f2da7f87a6c2d06f60e4b2f8a7396883f7cf4b035c792c4a585c3dcc9"
+          },
+          "note": "Original Issue04/Issue06 app and navigation with RTL8723DS Wi-Fi. Native files are preserved. Passive navigation layout and configuration IPC reviewed offline; physical validation on original hardware pending.",
+          "navigation_calibration_template_sha256": "fd7bca141bf8b63cb7d1a03f12ac905b9e1cf8876316130b6c8be819d638016b"
         }
       ]
     },

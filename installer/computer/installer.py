@@ -125,6 +125,11 @@ firmware_digest() {
  value=$(sha256sum "$1" 2>/dev/null) || return 1
  printf '%s' "${value%% *}"
 }
+firmware_calibration_digest() {
+ test -f "$1" || return 1
+ value=$(sed 's/^\\([ \\t]*export HOSLAM_\\(LASER_ANGLE\\|GYRO_KGTG\\|TOF_OFFSET\\|TOF_XTALK\\|GYRO_[XYZ]_OFFSET\\|ACC_[XYZ]_OFFSET\\)=\\)[+-]\\{0,1\\}[0-9][0-9]*\\(\\.[0-9][0-9]*\\)\\{0,1\\}$/\\1CALIBRATION/' "$1" | sha256sum) || return 1
+ printf '%s' "${value%% *}"
+}
 verify_firmware_files() {
  while read -r expected path; do
   case "$path" in
@@ -134,6 +139,9 @@ verify_firmware_files() {
   esac
   if test "$actual" = "$expected"; then
    echo "Firmware PASS: $path SHA256=$actual"
+  elif test "$path" = /root/etc/init.d/S51hoslam && test -n "${firmware_calibration_template:-}" &&
+       test "$(firmware_calibration_digest "$path")" = "$firmware_calibration_template"; then
+   echo "Firmware PASS: $path reviewed template with device-specific calibration preserved"
   elif test "${firmware_strict:-0}" = 0 && test "$path" = /root/yg/ygclient && test "${#actual}" -eq 64 &&
        case "$actual" in *[!0-9a-f]*) false;; *) true;; esac; then
    echo "Firmware WARNING: $path has unknown SHA-256 $actual (expected $expected)" >&2
@@ -183,8 +191,21 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
             component_names = set(catalog['variants'])
             for component in component_profiles:
                 cf, cn, note = component['files'], component['name'], component['note']
+                calibration = component.get('navigation_calibration_template_sha256', '')
+                if calibration and (not isinstance(calibration, str) or not re.fullmatch(r'[a-f0-9]{64}', calibration)
+                                    or '/root/etc/init.d/S51hoslam' not in cf):
+                    raise ValueError('Invalid navigation calibration template')
+                # Hardware alternatives replace hash checks only, never robot files.
+                replacements = component.get('replace_module_checks', {})
+                module_path = r'/root/(?:firmware/arobot/)?modules/[A-Za-z0-9_-]+\.ko'
+                if (not isinstance(replacements, dict)
+                        or any(not re.fullmatch(module_path, old) or not re.fullmatch(module_path, new)
+                               or old not in files or old in cf or new not in cf
+                               for old, new in replacements.items())
+                        or len(set(replacements.values())) != len(replacements)):
+                    raise ValueError('Invalid component module replacements')
                 if (not re.fullmatch(r'[A-Za-z0-9_-]+', cn) or cn in component_names
-                        or not set(files).issubset(cf)
+                        or not (set(files) - set(replacements)).issubset(cf)
                         or any(not re.fullmatch(path_pattern, path) or not re.fullmatch(r'[a-f0-9]{64}', digest)
                                for path, digest in cf.items())
                         or any(cf[path] != files[path] for path in ('/dev/mtd1', '/dev/mtd2', '/dev/mtd3'))
@@ -195,9 +216,9 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
                     raise ValueError('Duplicate component profile selector')
                 occupied.add(cs); component_names.add(cn)
                 lines += [' ' + cs + ')', '  firmware_variant=' + shlex.quote(cn),
-                          '  firmware_strict=1', "  verify_firmware_files <<'ZIGMA_COMPONENT_FIRMWARE'"]
+                          '  firmware_strict=1', '  firmware_calibration_template=' + shlex.quote(calibration), "  verify_firmware_files <<'ZIGMA_COMPONENT_FIRMWARE'"]
                 lines.extend(f'{digest} {path}' for path, digest in cf.items())
-                lines += ['ZIGMA_COMPONENT_FIRMWARE', '  firmware_strict=0',
+                lines += ['ZIGMA_COMPONENT_FIRMWARE', '  firmware_strict=0', '  firmware_calibration_template=',
                           '  echo ' + shlex.quote('Firmware NOTE: ' + note), '  ;;']
             lines += [' *)']
         lines += [" verify_firmware_files <<'ZIGMA_REVIEWED_FIRMWARE'"]

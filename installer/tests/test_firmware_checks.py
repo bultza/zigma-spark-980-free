@@ -6,6 +6,8 @@ from pathlib import Path
 import shlex
 import subprocess
 import unittest
+import tempfile
+import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('zigma_installer', ROOT/'computer/installer.py')
@@ -195,6 +197,47 @@ class FirmwareChecks(unittest.TestCase):
         # An Issue04 app pair on otherwise original Ciccia must not bypass its
         # distinct daemon and startup checks.
         self.assertTrue(self.run_checks(OVERLAY, changed=pair)[0].startswith('RESULT:ssh:1:'))
+
+    def test_russian_original_exact_components(self):
+        cp = CATALOG['variants'][OVERLAY]['component_profiles'][1]
+        original = dict(cp['files']); original['/root/modules/8189fs.ko'] = None
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(OVERLAY, changed=original, requested=requested)
+            self.assertTrue(result.startswith('RESULT:' + requested + ':0:'))
+            self.assertIn('Firmware recognized: issue04-russian-original', output)
+        for path in cp['files']:
+            for value in (None, 'b'*64):
+                changed = dict(original); changed[path] = value
+                with self.subTest(path=path, value=value):
+                    self.assertTrue(self.run_checks(OVERLAY, changed=changed)[0].startswith('RESULT:ssh:1:'))
+        # Native pair alone cannot authorize a foreign base or Ciccia Wi-Fi.
+        for base in CATALOG['variants']:
+            self.assertTrue(self.run_checks(base, changed={APP:cp['files'][APP], NAV:cp['files'][NAV]})[0].startswith('RESULT:ssh:1:'))
+
+    def test_component_module_replacements_are_narrow(self):
+        for mode in ('non-module', 'missing-new', 'kept-old', 'not-a-dict'):
+            c = copy.deepcopy(CATALOG); cp = c['variants'][OVERLAY]['component_profiles'][1]
+            if mode == 'non-module': cp['replace_module_checks'] = {'/root/app_server/daemon':'/root/firmware/arobot/modules/8723ds.ko'}
+            if mode == 'missing-new': cp['files'].pop('/root/firmware/arobot/modules/8723ds.ko')
+            if mode == 'kept-old': cp['files']['/root/modules/8189fs.ko'] = 'a'*64
+            if mode == 'not-a-dict': cp['replace_module_checks'] = []
+            with self.subTest(mode=mode), self.assertRaises(ValueError): installer.firmware_checks(c)
+
+    def test_navigation_calibration_digest_only_ignores_numeric_exports(self):
+        script = installer.firmware_checks(CATALOG)
+        helper = script[script.index('firmware_calibration_digest() {'):script.index('verify_firmware_files() {')]
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d)/'S51hoslam'
+            def digest(text):
+                path.write_text(text)
+                return subprocess.check_output(['sh', '-c', helper+'\nfirmware_calibration_digest "$1"', 'test', str(path)], text=True)
+            template = '#!/bin/sh\n\texport HOSLAM_LASER_ANGLE=CALIBRATION\nexport HOSLAM_LIDAR_MODEL=camsense\n'
+            expected = hashlib.sha256(template.encode()).hexdigest()
+            for value in ('-2.870378', '+1.25', '0', '43.000000'):
+                self.assertEqual(digest(template.replace('CALIBRATION', value)), expected)
+            for value in ('1; reboot', '$(id)', '1 # comment', 'nan', ''):
+                self.assertNotEqual(digest(template.replace('CALIBRATION', value)), expected)
+            self.assertNotEqual(digest(template.replace('CALIBRATION', '1').replace('camsense', 'other')), expected)
 
     def test_legacy_decisions_identical_without_issue04_extension(self):
         legacy = copy.deepcopy(CATALOG)

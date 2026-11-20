@@ -333,14 +333,30 @@ def post_pairing(config):
 
 class Robot:
     def __init__(self, host, key, directory):
+        import uuid
         self.host, self.key, self.directory = host, key, directory
         self.host_key = None
+        self.ssh_log_name = 'zigma.wizard.ssh.' + uuid.uuid4().hex
+
+    def ssh_logger(self):
+        import logging
+        # Transport threads can log after a failed connect has been closed.
+        # Keep this session's handler attached; never suppress global Paramiko
+        # logging or depend on a temporary catch around connect().
+        logger = logging.getLogger(self.ssh_log_name)
+        if not logger.handlers:
+            handler = logging.FileHandler(self.directory/'ssh-transport.log', encoding='utf-8', delay=True)
+            handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+            logger.addHandler(handler)
+            logger.setLevel(logging.WARNING)
+            logger.propagate = False
+        return logger
 
     def command(self, command, timeout=15, diagnostic=None, script=None):
         import paramiko
         robot = self
         started = time.monotonic()
-        trace(f'[SSH] Connecting root@{self.host}:22 with session key; connect/banner/auth timeouts=4s each.')
+        trace(f'[SSH] Connecting root@{self.host}:22 with session key; negotiation/banner/auth timeouts=12/8/8s; transport diagnostics: {self.directory / "ssh-transport.log"}.')
         class Pin(paramiko.MissingHostKeyPolicy):
             def missing_host_key(self, client, hostname, key):
                 if robot.host_key is not None and robot.host_key != key:
@@ -348,9 +364,10 @@ class Robot:
                 trace('[SSH] Host key ' + ('matches session pin.' if robot.host_key is not None else 'first seen; trusting this local network and pinning for this session.'))
                 robot.host_key = key
         with paramiko.SSHClient() as client:
+            client.set_log_channel(self.ssh_logger().name)
             client.set_missing_host_key_policy(Pin())
             client.connect(self.host, username='root', pkey=self.key, allow_agent=False,
-                           look_for_keys=False, timeout=4, banner_timeout=4, auth_timeout=4)
+                           look_for_keys=False, timeout=12, banner_timeout=8, auth_timeout=8)
             # Save only after authentication with this session's fresh private key.
             known = paramiko.HostKeys()
             known.add(self.host, self.host_key.get_name(), self.host_key)
@@ -473,6 +490,8 @@ def activate(robot, allow_manual_reboot=True):
             # Never include response bodies or credential-returning output.
             if stage in ('Web credential', 'Web status JSON'):
                 return failed(stage, type(exc).__name__ + '; value/body withheld')
+            if isinstance(exc, (OSError, EOFError, paramiko.SSHException)) and not isinstance(exc, paramiko.AuthenticationException):
+                return failed(stage, 'Connection interrupted; retrying verification (' + type(exc).__name__ + ').')
             return failed(stage, type(exc).__name__ + ': ' + str(exc))
     try:
         token = wait_until(healthy, 90, 'Local-mode verification failed; keep power on for automatic recovery.', label='Authenticated SSH/web trial', quiet=True)

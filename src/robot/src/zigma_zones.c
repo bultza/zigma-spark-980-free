@@ -18,10 +18,12 @@ static int zones_profile_hash(const char *hash){
  if(!strcmp(hash,"4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a")||!strcmp(hash,"8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c"))return 1;
  return 0;
 }
-/* Exact known navigation images; Puron enabled for user validation. */
+/* Exact reviewed images. Issue04 type16 dispatcher 0x76faa -> 0x77e20
+ * replies with type17 at 0x77e60; physical validation remains pending. */
 static bool zones_navigation_hash(const char *hash){
  return !strcmp(hash,"b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255")||
-        !strcmp(hash,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8");
+        !strcmp(hash,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8")||
+        !strcmp(hash,"1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664");
 }
 static bool zones_receiver_hash(int q,const char *expected,char hash[65]){
  struct msqid_ds info;if(msgctl(q,IPC_STAT,&info)||!zigma_native_process(info.msg_lrpid,expected))return false;

@@ -94,13 +94,13 @@ static bool memory_read(int fd,uint32_t address,void *data,size_t n){return addr
 static void replace_value(cJSON *o,const char *key,cJSON *value){cJSON_DeleteItemFromObjectCaseSensitive(o,key);cJSON_AddItemToObject(o,key,value);}
 #include "zigma_core_observation.h"
 #include "zigma_navigation_profile.h"
-static cJSON *cached_navigation_pose(int fd,const cJSON *geometry){
- /* Profile-specific singleton; shared geometry/pose layout, validated below. */
+static cJSON *cached_navigation_pose(int fd,const cJSON *geometry,const struct navigation_profile *expected){
+ /* Profile-specific singleton and pose block; shared geometry, validated below. */
  uint32_t base=0,again=0,vtable=0,vagain=0;unsigned char a[40],b[40],ma[28],mb[28];
- const struct navigation_profile *profile=navigation_profile_fd(fd);
+ const struct navigation_profile *profile=navigation_profile_fd(fd,expected);
  if(!geometry||!profile)return NULL;
  base=profile->base;vtable=profile->vtable;
- if(!memory_read(fd,base+0x1120,a,sizeof(a))||!memory_read(fd,base+0xe44,ma,sizeof(ma))||!memory_read(fd,base+0x1120,b,sizeof(b))||!memory_read(fd,base+0xe44,mb,sizeof(mb))||memcmp(a,b,sizeof(a))||memcmp(ma,mb,sizeof(ma))||!memory_read(fd,profile->slot,&again,4)||again!=base||!memory_read(fd,base,&vagain,4)||vagain!=vtable)return NULL;
+ if(!memory_read(fd,base+profile->pose_offset,a,sizeof(a))||!memory_read(fd,base+0xe44,ma,sizeof(ma))||!memory_read(fd,base+profile->pose_offset,b,sizeof(b))||!memory_read(fd,base+0xe44,mb,sizeof(mb))||memcmp(a,b,sizeof(a))||memcmp(ma,mb,sizeof(ma))||!memory_read(fd,profile->slot,&again,4)||again!=base||!memory_read(fd,base,&vagain,4)||vagain!=vtable)return NULL;
  if(a[0]!=1||a[1]!=1)return NULL;
  float pose[3],origin[2],resolution;uint32_t dimensions[2];memcpy(pose,a+28,12);memcpy(origin,ma+8,8);memcpy(dimensions,ma+16,8);memcpy(&resolution,ma+24,4);
  cJSON *grid_origin=get((cJSON*)geometry,"map_origin"),*ox=cJSON_GetArrayItem(grid_origin,0),*oy=cJSON_GetArrayItem(grid_origin,1),*id=get((cJSON*)geometry,"map_id");
@@ -116,7 +116,7 @@ static void enrich_navigation_pose(cJSON *status){
  char path[128];
  if(!zigma_native_process(nav_pid,"/root/hoslam/demo_rplidar"))return;
  snprintf(path,sizeof(path),"/proc/%d/mem",nav_pid);int fd=open(path,O_RDONLY);if(fd<0)return;
- cJSON *pose=cached_navigation_pose(fd,map_geometry);close(fd);if(pose)cJSON_AddItemToObject(status,"navigation_pose",pose);
+ cJSON *pose=cached_navigation_pose(fd,map_geometry,navigation_profile_process(nav_pid));close(fd);if(pose)cJSON_AddItemToObject(status,"navigation_pose",pose);
 }
 static void remember_map_geometry(cJSON *map){
  cJSON_Delete(map_geometry);map_geometry=cJSON_CreateObject();
