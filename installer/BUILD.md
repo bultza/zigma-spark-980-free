@@ -19,6 +19,14 @@ For the installation steps, see [Install Zigma Free](README.md).
 
 These files live in [computer/](computer/) and run from the extracted deployment archive. The launchers create `.wizard-venv/` beside the scripts, and the wizard saves session files under `~/Zigma/`.
 
+## Local-mode transition diagnostics
+
+`zigma-network` V1.6 excludes exited (`Z`, `X`, `x`) vendor/WPA/DHCP processes from ownership conflicts. Such processes no longer own sockets; live foreign owners still block the takeover, including owners on another interface. Missing processes are skipped, while malformed or unreadable owner metadata fails closed.
+
+`/tmp/zigma-network/status.json` records `conflict_pid`, `conflict_ppid`, `conflict_name`, `conflict_state`, and `conflict_start` (kernel start ticks), plus `ignored_zombies` and `owner_scan_errno`. Zero conflict IDs mean no identified live conflict; a nonzero scan error means the scan could not safely determine ownership. No command-line arguments or credentials are logged. The activation snapshot includes the boot ID and copies these fields into the persistent `activation/trial-diagnosis.log`, so a failed transition can be distinguished from a reboot or a slow SSH handshake.
+
+Regression test: `python3 -m unittest discover -s installer/tests -p test_network_ownership.py` from the repository root. It checks all six owner names, live and dead states, malformed/renamed/disappeared processes, diagnostic metadata, and a real unreaped zombie. A controlled vendor-to-local transition was also verified on Ciccia/Puron Issue03 with a test zombie present: SSH, authenticated web, control-queue health and acceptance passed without a reboot. This does not prove the exact cause of an older incident whose conflicting process was not recorded.
+
 ## Robot scripts
 
 Source paths are relative to [robot/](robot/). Entries in `bundle.tar.gz` are relative to the archive root. On the overlay layout, the stack is stored under `/root/firmware/arobot/zigma-free` and exposed at `/root/zigma-free`.

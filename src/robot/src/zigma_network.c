@@ -110,6 +110,10 @@ static bool capture(char *const argv[],char *out,size_t cap){
  if(!done)stop_child(&pid);
  return done&&!overflow&&WIFEXITED(status)&&WEXITSTATUS(status)==0;
 }
+/* Only metadata from /proc is published, never argv or network credentials. */
+static struct { long pid,ppid; unsigned long long start; char name[64],state; } conflict;
+static unsigned ignored_zombies;
+static int owner_scan_errno;
 static bool publish(const char *state,const char *ip,unsigned failures){
  char tmp[1100];int n=snprintf(tmp,sizeof tmp,"%s.new",state_path);
  if(n<0||(size_t)n>=sizeof tmp)return false;
@@ -118,9 +122,14 @@ static bool publish(const char *state,const char *ip,unsigned failures){
  bool ok=fprintf(f,"{\"state\":\"%s\",\"interface\":\"%s\",\"ipv4\":\"%s\","
   "\"manager_pid\":%ld,\"wpa_pid\":%ld,\"dhcp_pid\":%ld,\"retry_count\":%u,"
   "\"manager_start\":%llu,\"wpa_start\":%llu,\"dhcp_start\":%llu,"
-  "\"updated_at\":%lld,\"monotonic_ms\":%lld,\"wan_checked\":false}\n",
+  "\"updated_at\":%lld,\"monotonic_ms\":%lld,\"wan_checked\":false,"
+  "\"conflict_pid\":%ld,\"conflict_ppid\":%ld,\"conflict_start\":%llu,"
+  "\"conflict_name\":\"%s\",\"conflict_state\":\"%c\","
+  "\"ignored_zombies\":%u,\"owner_scan_errno\":%d}\n",
   state,iface,ip,(long)getpid(),(long)wpa_pid,(long)dhcp_pid,failures,
-  start_ticks(getpid()),start_ticks(wpa_pid),start_ticks(dhcp_pid),(long long)time(NULL),mono_ms())>0;
+  start_ticks(getpid()),start_ticks(wpa_pid),start_ticks(dhcp_pid),(long long)time(NULL),mono_ms(),
+  conflict.pid,conflict.ppid,conflict.start,conflict.name,conflict.state?conflict.state:'-',
+  ignored_zombies,owner_scan_errno)>0;
  if(fclose(f))ok=false;
  if(ok&&rename(tmp,state_path)==0)return true;
  unlink(tmp);return false;
@@ -128,21 +137,53 @@ static bool publish(const char *state,const char *ip,unsigned failures){
 /* Refuse coexistence, including foreign WPA/DHCP on another interface. Conservative
  * until per-interface handover has been validated on the target. Read failure is fatal. */
 static pid_t ap_pid, ap_dhcp_pid;
+/* A zombie no longer owns sockets or an interface. The transition backend
+ * also considers Z stopped; counting it here strands the handover until reboot.
+ * Read stat only for recognized owner names, and fail closed on ambiguity. */
+static int owner_stat(long pid,const char *name,char *state,long *ppid,unsigned long long *ticks){
+ char path[1024],rel[64],line[4096];snprintf(rel,sizeof rel,"%ld/stat",pid);
+ if(!join(path,sizeof path,procroot,rel)){errno=ENAMETOOLONG;return -1;}
+ FILE *f=fopen(path,"r");if(!f)return -1;
+ bool ok=fgets(line,sizeof line,f)!=NULL;int saved=errno;fclose(f);
+ if(!ok){errno=saved?saved:EIO;return -1;}
+ char *left=strchr(line,'('),*right=strrchr(line,')'),*end;
+ long got=strtol(line,&end,10);
+ if(!left||!right||right<=left||end!=left-1||got!=pid||
+    (size_t)(right-left-1)!=strlen(name)||memcmp(left+1,name,strlen(name))){errno=EAGAIN;return -1;}
+ char *save=NULL,*token=strtok_r(right+1," \n",&save);
+ if(!token||strlen(token)!=1||!strchr("RSDZTtXxKWPI",token[0])){errno=EINVAL;return -1;}
+ *state=token[0];
+ for(int field=4;field<=22;field++){
+  token=strtok_r(NULL," \n",&save);if(!token){errno=EINVAL;return -1;}
+  if(field==4){errno=0;*ppid=strtol(token,&end,10);if(errno||*end||*ppid<0){errno=EINVAL;return -1;}}
+  if(field==22){errno=0;*ticks=strtoull(token,&end,10);if(errno||*end||token[0]=='-'||!*ticks){errno=EINVAL;return -1;}}
+ }
+ return 0;
+}
 static int foreign_owner(void){
- DIR *d=opendir(procroot);if(!d)return -1;
+ memset(&conflict,0,sizeof conflict);ignored_zombies=0;owner_scan_errno=0;
+ DIR *d=opendir(procroot);if(!d){owner_scan_errno=errno;return -1;}
  struct dirent *e;int found=0;
  while((e=readdir(d))){
   char *end;long pid=strtol(e->d_name,&end,10);if(*end||pid<=0||pid==wpa_pid||pid==dhcp_pid||pid==ap_pid||pid==ap_dhcp_pid)continue;
   char path[1024],rel[64];snprintf(rel,sizeof rel,"%ld/comm",pid);
-  if(!join(path,sizeof path,procroot,rel)){found=-1;break;}
-  FILE *f=fopen(path,"r");if(!f){if(errno==ENOENT||errno==ESRCH)continue;found=-1;break;}
-  char name[64];bool ok=fgets(name,sizeof name,f)!=NULL;fclose(f);if(!ok){
-   if(!start_ticks((pid_t)pid))continue;
-   found=-1;break;
-  }
+  if(!join(path,sizeof path,procroot,rel)){owner_scan_errno=ENAMETOOLONG;found=-1;break;}
+  FILE *f=fopen(path,"r");if(!f){if(errno==ENOENT||errno==ESRCH)continue;owner_scan_errno=errno;found=-1;break;}
+  char name[64];bool ok=fgets(name,sizeof name,f)!=NULL;fclose(f);
+  if(!ok){owner_scan_errno=EIO;found=-1;break;}
   name[strcspn(name,"\r\n")]=0;
-  if(!strcmp(name,"ygclient")||!strcmp(name,"daemon")||!strcmp(name,"wpa_supplicant")||
-     !strcmp(name,"udhcpc")||!strcmp(name,"hostapd")||!strcmp(name,"udhcpd")){found=1;break;}
+  if(strcmp(name,"ygclient")&&strcmp(name,"daemon")&&strcmp(name,"wpa_supplicant")&&
+     strcmp(name,"udhcpc")&&strcmp(name,"hostapd")&&strcmp(name,"udhcpd"))continue;
+  char state=0;long ppid=0;unsigned long long ticks=0;
+  if(owner_stat(pid,name,&state,&ppid,&ticks)){
+   int why=errno;
+   if(why==ENOENT||why==ESRCH)continue;
+   conflict.pid=pid;snprintf(conflict.name,sizeof conflict.name,"%s",name);
+   owner_scan_errno=why;found=-1;break;
+  }
+  if(state=='Z'||state=='X'||state=='x'){ignored_zombies++;continue;}
+  conflict.pid=pid;conflict.ppid=ppid;conflict.start=ticks;conflict.state=state;
+  snprintf(conflict.name,sizeof conflict.name,"%s",name);found=1;break;
  }
  closedir(d);return found;
 }

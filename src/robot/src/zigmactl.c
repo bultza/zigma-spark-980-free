@@ -85,6 +85,7 @@ static int send_command(unsigned char b0,
 }
 
 #include "zigma_navigation.h"
+#include "zigma_manual.h"
 
 static int reboot_robot(void)
 {
@@ -99,7 +100,7 @@ static int reboot_robot(void)
     printf("Holding AM380 in reset and rebooting Linux...\n");
     fflush(NULL);
 
-    status = system("/root/bin/hold380 && reboot");
+    status = system("/root/bin/hold380 && /sbin/reboot");
     if (status < 0) {
         perror("system");
         return 1;
@@ -138,6 +139,7 @@ int main(int argc, char **argv)
         if(argc==3&&!strcmp(argv[2],"--json"))return ctl_status(true);
         fprintf(stderr,"Usage: zigmactl status [--json]\n");return 2;
     }
+    if(argc>=2&&(!strcmp(argv[1],"drive")||!strcmp(argv[1],"stop")||!strcmp(argv[1],"hold")||!strcmp(argv[1],"manual-check")))return manual_cli(argc,argv);
     int x,y,timeout=300;
     if(argc==2&&!strcmp(argv[1],"getvolume"))return nav_volume(false,0);
     if(argc==3&&!strcmp(argv[1],"setvolume")){
@@ -158,7 +160,7 @@ int main(int argc, char **argv)
     }
     if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[1], "clean") && strcmp(argv[1], "resume"))) {
         fprintf(stderr,
-                "Usage: %s {status [--json]|check-control|clean [1-3]|resume [1-3]|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
+                "Usage: %s {status [--json]|check-control|clean [1-3]|resume [1-3]|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|drive forward/backward/left/right duration|hold direction|manual-check|stop|getvolume|setvolume 0-100}\n",
                 argv[0]);
         return 1;
     }

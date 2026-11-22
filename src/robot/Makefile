@@ -30,7 +30,7 @@ $(OUTPUT)/zigma-area-arm: src/zigma_area.c
 $(OUTPUT)/zigma-zones-arm: src/zigma_zones.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-maps-arm: src/zigma_maps.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-options-arm: src/zigma_options.c
-$(OUTPUT)/zigmactl: src/zigmactl.c $(CJSON)
+$(OUTPUT)/zigmactl: src/zigmactl.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-nor-backup-arm: src/zigma_nor_backup.c $(CRYPTO)
 
 $(ARM_BINARIES) $(OUTPUT)/zigma-nor-backup-arm: $(HEADERS) src/zigma_versions_generated.h Makefile $(SDK)/.ready
@@ -58,7 +58,7 @@ test-puron-settings:
 .PHONY: test-navigation
 test-navigation:
 	mkdir -p build/tests
-	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_navigation.c $(CJSON) -lm -o build/tests/test-navigation
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_navigation.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-navigation
 	build/tests/test-navigation
 
 .PHONY: test-puron-zones
@@ -96,3 +96,17 @@ test-app-profiles:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_app_profiles.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-app-profiles
 	build/tests/test-app-profiles
+
+.PHONY: test-manual-control
+test-manual-control:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_manual_control.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-manual-control
+	build/tests/test-manual-control
+
+# Local two-thread process only; never attaches to a robot or vendor process.
+.PHONY: test-manual-queue
+test-manual-queue:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) -no-pie tests/test_manual_queue.c $(CJSON) $(CRYPTO) -lm -pthread -o build/tests/test-manual-queue
+	build/tests/test-manual-queue release
+	build/tests/test-manual-queue

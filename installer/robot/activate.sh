@@ -25,7 +25,7 @@ if test "${1:-}" = capture;then
  exec >"$state/trial-diagnosis.log" 2>&1
  n=0
  while test "$n" -lt 55;do
-  echo "SNAPSHOT epoch=$(date +%s) uptime=$(cut -d ' ' -f 1 /proc/uptime)"
+  echo "SNAPSHOT epoch=$(date +%s) uptime=$(cut -d ' ' -f 1 /proc/uptime) boot=$boot"
   for file in "$runtime/state" /tmp/zigma-network/status.json /tmp/zigma-core/health.json;do
    echo "FILE $file"; head -c 4096 "$file" 2>/dev/null || true;echo
   done
