@@ -103,6 +103,7 @@ static int library_command(const char *folder,const char *op,const char *json){
 }
 #include "zigma_map_native.h"
 #include "zigma_map_delete_puron.h"
+#include "zigma_map_delete_robojet.h"
 static int native_delete_command(const char *pid,const char *json,bool dry,bool clear){
  const char *end;cJSON *r=cJSON_ParseWithOpts(json,&end,1);uint32_t target,active;bool valid=cJSON_IsObject(r)&&(!item(r,"backup")||cJSON_IsBool(item(r,"backup")))&&map_id(string(r,"id"),&target)&&target>0&&map_id(string(r,"active_id"),&active)&&(clear?active==target:active!=target)&&cJSON_IsTrue(item(r,"confirm"))&&(!clear||!strcmp(string(r,"confirmation_text"),"CLEAR"));
  if(!valid){cJSON_Delete(r);return lib_error("Invalid map identity or missing explicit confirmation");}
@@ -118,6 +119,7 @@ static int native_delete_command(const char *pid,const char *json,bool dry,bool 
   }
   uint32_t last;if(!native_identity(pid,&last)||last!=active||!native_idle(pid)){cJSON_Delete(r);return lib_error("Active map changed; no deletion sent");}
  }
+ if(!dry&&native_is_robojet(pid)){cJSON_Delete(r);return robojet_map_dispatch(pid,target,active,clear);}
  if(!dry&&native_is_puron(pid)){cJSON_Delete(r);return puron_map_dispatch(pid,target,active,clear);}
  cJSON *payload=cJSON_CreateObject();cJSON_AddStringToObject(payload,"ProtocolVersion","1.0");cJSON_AddStringToObject(payload,"cmd_origin","app");if(clear)cJSON_AddStringToObject(payload,"WorkStatus","ClearMap");else{cJSON_AddStringToObject(payload,"cmd","del_local_map");cJSON *ids=cJSON_AddArrayToObject(payload,"DelHismapIds");cJSON_AddItemToArray(ids,cJSON_CreateString(string(r,"id")));}cJSON_Delete(r);
  if(dry)return print_json(payload);

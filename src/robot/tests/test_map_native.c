@@ -39,7 +39,7 @@ int main(void){
  assert(ftruncate(fd,0)==0);
  assert(pwrite(fd,robojet_import_prefix,sizeof robojet_import_prefix,0x1c67c)==sizeof robojet_import_prefix);
  word(fd,0x43e08,1);unsigned char rs[92]={0};put32(rs,4);assert(pwrite(fd,rs,sizeof rs,0x4395c)==sizeof rs);
- assert(map_profile_fd(fd)==&robojet_map_profile&&map_idle_fd(fd));assert(!map_identity_fd(fd,&nid));assert(!robojet_map_profile.clear_supported);
+ assert(map_profile_fd(fd)==&robojet_map_profile&&map_idle_fd(fd));assert(!map_identity_fd(fd,&nid));assert(robojet_map_profile.clear_supported);
  word(fd,0x4395c+44,1);assert(!map_idle_fd(fd));word(fd,0x4395c+44,0);word(fd,0x43e08,0);assert(!map_idle_fd(fd));
  assert(ftruncate(fd,0)==0);
  unsigned char rn[]={0x41,0xf6,0x34,0x30,0x08,0xb5,0xc0,0xf2,0xa2,0x00,0x03,0x78,0xbf,0xf3,0x5b,0x8f,0xdb,0x07,0x04,0xd5,0x41,0xf6,0x38,0x30,0xc0,0xf2,0xa2,0x00},rg[]={0x60,0x6c,0x03,0xb0,0x30,0xbd};
@@ -60,5 +60,9 @@ int main(void){
  assert(u32(received+8)!=0&&u32(received+8)!=21);
  assert(puron_clear_message(21,21,payload));assert(u32(payload)==8&&u32(payload+4)==21);
  assert(!puron_clear_message(0,0,payload));assert(!puron_clear_message(18,21,payload));assert(!puron_delete_message(21,21,payload));
+ unsigned char rj[4096];assert(!robojet_delete_message(0,0,true,rj));assert(!robojet_delete_message(11,11,false,rj));assert(!robojet_delete_message(22,11,true,rj));assert(!robojet_delete_message(UINT32_MAX,11,false,rj));assert(!robojet_delete_message(22,UINT32_MAX,false,rj));
+ assert(robojet_delete_message(22,11,false,rj));assert(u32(rj)==8&&u32(rj+4)==22);for(size_t i=8;i<sizeof rj;i++)assert(!rj[i]);
+ assert(robojet_delete_message(11,11,true,rj));unsigned char wire[4100]={0};put32(wire,27);memcpy(wire+4,rj,sizeof rj);assert(u32(wire)==27&&u32(wire+8)==11);
+ assert(robojet_delete_message(22,0,false,rj));
  puts("Zigma/Puron map identity, state, errors and unsupported memory: PASS");return 0;
 }

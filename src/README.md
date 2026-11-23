@@ -245,3 +245,11 @@ once per native process identity, including after cold boot. Observer V1.21
 distinguishes unavailable zones from a confirmed empty list when deciding
 whether to publish the cache. Null native pointers still mean unavailable;
 they are never silently treated as an empty zone set.
+
+### RoboJet native deletion/reset (Maps V1.18)
+
+Both operations are enabled through the reviewed type-27 navigation message,
+with exact paired hashes, queue ownership, ID/revision and backup checks. The app
+has ClearMap but no del_local_map JSON handler. See [protocol review](../hack/ROBOJET_MAP_DELETE.md).
+Offline tests and ARM build cover this update; no robot deletion/reset was tested
+and RC17 archives have not been rebuilt.

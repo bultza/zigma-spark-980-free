@@ -39,7 +39,7 @@ this feature inventory.
 | Separate no-vacuum and no-mop restrictions | Unavailable; only general exclusion polygons are supported. | The legacy format stores four coordinate pairs without a restriction-class field. |
 | Virtual-wall editing | Walls can be viewed and preserved, but not created, edited or deleted through this variant's editor. | The implemented writer handles forbidden polygons. It omits wall fields to preserve the existing wall configuration. |
 | Reliable restore after standby / complete reload after reboot | Not fully validated. Same-map and cross-ID imports have succeeded. | Native requests sometimes remained queued; the converted test map retained its file and selected ID after reboot without republishing its live grid. |
-| Native saved-map deletion and clear/reset | Not enabled for this variant. | These operations require a separately supported native identity and control protocol; preview support does not enable them. This does not prevent managing protected copies in the private library. |
+| Native saved-map deletion and clear/reset | Enabled in Maps V1.18; physical outcome and reboot persistence remain untested. | Uses the reviewed navigation type-27 ID operation; queue delivery alone does not confirm completion. |
 | Physical-unit validation for area/time | Statistics are enabled; nonzero physical measurements have not independently verified the scale. | The executable publishes these RAM fields unchanged as `CleanArea` and `CleanTime`. We apply the existing JSON contract (m² and minutes), but a nonzero real-world sample is still needed to validate the scale. |
 | Editing an arbitrary saved preview | Unavailable. Detailed-view editing requires the current map identity and a supported coordinate transform. | Sending geometry against an unrelated saved frame could target the wrong location. Reset and relocation also block editing. |
 
@@ -47,6 +47,8 @@ The polygon editor supports up to twelve forbidden polygons. Unknown zone
 configuration, missing coordinates, unsupported restriction types and changed
 map/base snapshots are rejected rather than guessed. Command dispatch and
 configuration readback are distinct from physical navigation validation.
+
+See [native deletion/reset protocol](ROBOJET_MAP_DELETE.md). Maps V1.18 is a source/build update after RC17; existing release archives have not been rebuilt.
 
 ## Installer profiles
 
@@ -59,12 +61,13 @@ replace them. Original-hardware installation and cold boot remain unverified.
 
 ## Version scope
 
-The current implementation uses agent V1.35, observer V1.22, maps V1.17,
+The current implementation uses agent V1.35, observer V1.22, maps V1.18,
 area V1.2, zones V1.8, service V1.10 and zigmactl V1.15, with the updated web UI.
 The RoboJet command adapters require the reviewed native executable identities;
 the relevant paired operations also verify the matching navigation executable.
 
-These follow-up changes were installed on Ciccia and are included in RC16.
+The changes through Maps V1.17 were installed on Ciccia and are included in RC16.
+Maps V1.18 deletion/reset has not been deployed or physically tested.
 Existing RC15 distribution archives have not been rebuilt.
 
 Implementation details and regression commands are in [src/README.md](../src/README.md).

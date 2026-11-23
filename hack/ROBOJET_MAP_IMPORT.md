@@ -111,8 +111,9 @@ app-state layout, the navigation MultipleMap initialized singleton/current ID,
 v2 checksum/format checks and a single native import command. The current-ID
 reader verifies the unique live navigation executable, its SHA256 and code
 fingerprints; a stale queue receiver thread after native respawn is not reused.
-Deletion and clear/reset remain disabled. Other map formats are not enabled
-for this profile.
+Maps V1.18 additionally enables [native deletion/reset](ROBOJET_MAP_DELETE.md)
+after offline protocol review; physical testing remains pending. Other map formats
+are not enabled for this profile.
 
 Confirmation requires native success, matching active ID and a map publication
 at or after the result timestamp. Native log timestamps use the producer's TZ.

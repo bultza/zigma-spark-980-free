@@ -11,7 +11,7 @@ static const struct map_native_profile map_profiles[]={
 };
 /* RoboJet has a different app map cache. Read the authoritative selected ID
  * from the exact paired navigation singleton instead of borrowing offsets. */
-static const struct map_native_profile robojet_map_profile={"robojet-issue08",0x1c67c,0,0x43e08,0x4395c,92,true,false};
+static const struct map_native_profile robojet_map_profile={"robojet-issue08",0x1c67c,0,0x43e08,0x4395c,92,true,true};
 static const unsigned char robojet_import_prefix[]={0xf0,0xb5,0x04,0x46,0xa1,0xb0,0x00,0x28,0x38,0xd0,0x36,0x49};
 static bool robojet_navigation_identity_fd(int fd,uint32_t *id){
  const unsigned char singleton[]={0x41,0xf6,0x34,0x30,0x08,0xb5,0xc0,0xf2,0xa2,0x00,0x03,0x78,0xbf,0xf3,0x5b,0x8f,0xdb,0x07,0x04,0xd5,0x41,0xf6,0x38,0x30,0xc0,0xf2,0xa2,0x00};
@@ -21,7 +21,7 @@ static bool robojet_navigation_identity_fd(int fd,uint32_t *id){
  if(pread(fd,&guard,1,0xa21b34)!=1||guard!=1||pread(fd,a,4,0xa21b7c)!=4||pread(fd,b,4,0xa21b7c)!=4||memcmp(a,b,4)||u32(a)>INT32_MAX||pread(fd,&guard,1,0xa21b34)!=1||guard!=1)return false;
  *id=u32(a);return true;
 }
-static bool robojet_navigation_identity(uint32_t *id){
+static bool robojet_navigation_identity_process(uint32_t *id,uint32_t *process){
  /* msg_lrpid can refer to an exited receiver thread after native respawn.
   * Resolve the unique live executable directly, then verify its exact hash. */
  DIR *dir=opendir("/proc");if(!dir)return false;
@@ -31,8 +31,9 @@ static bool robojet_navigation_identity(uint32_t *id){
  }closedir(dir);char hash[65];
  if(!pid||duplicate||!zones_process_hash((int)pid,"/root/hoslam/demo_rplidar",hash)||strcmp(hash,"f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c"))return false;
  char path[80];snprintf(path,sizeof path,"/proc/%u/mem",pid);int fd=open(path,O_RDONLY|O_CLOEXEC);if(fd<0)return false;
- bool ok=robojet_navigation_identity_fd(fd,id);close(fd);return ok;
+ bool ok=robojet_navigation_identity_fd(fd,id);close(fd);if(ok&&process)*process=pid;return ok;
 }
+static bool robojet_navigation_identity(uint32_t *id){return robojet_navigation_identity_process(id,NULL);}
 static const struct map_native_profile *map_profile_fd(int fd){
  unsigned char robojet_code[sizeof robojet_import_prefix];
  if(pread(fd,robojet_code,sizeof robojet_code,robojet_map_profile.getter)==sizeof robojet_code&&!memcmp(robojet_code,robojet_import_prefix,sizeof robojet_code))return &robojet_map_profile;
@@ -82,7 +83,7 @@ static bool native_identity(const char *pid,uint32_t *id){int fd=native_map_fd(p
 static bool native_active(const char *pid,uint32_t *id){return native_identity(pid,id)&&*id>0;}
 static bool native_idle(const char *pid){int fd=native_map_fd(pid);if(fd<0)return false;bool ok=map_idle_fd(fd);close(fd);return ok;}
 static bool native_restore_supported(const char *pid){int fd=native_map_fd(pid);if(fd<0)return false;const struct map_native_profile *p=map_profile_fd(fd);bool ok=p&&p->restore_supported,robojet=p==&robojet_map_profile;close(fd);uint32_t id;return ok&&(!robojet||robojet_navigation_identity(&id));}
-static bool native_clear_supported(const char *pid){int fd=native_map_fd(pid);if(fd<0)return false;const struct map_native_profile *p=map_profile_fd(fd);bool ok=p&&p->clear_supported;close(fd);return ok;}
+static bool native_clear_supported(const char *pid){int fd=native_map_fd(pid);if(fd<0)return false;const struct map_native_profile *p=map_profile_fd(fd);bool ok=p&&p->clear_supported,robojet=p==&robojet_map_profile;close(fd);uint32_t id;return ok&&(!robojet||robojet_navigation_identity(&id));}
 static int native_active_command(const char *pid){
  uint32_t id;if(!native_identity(pid,&id))return lib_error("Native active-map cache unavailable");
  cJSON *o=cJSON_CreateObject();char text[16];snprintf(text,sizeof text,"%u",id);cJSON_AddStringToObject(o,"id",text);

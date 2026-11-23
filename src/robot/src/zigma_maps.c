@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 /* HOSLAM catalog and private master library. Native deletion is an explicit,
-   guarded type-9 operation; catalog/preview never send IPC. Explicit refresh-active requests native current-map metadata. No cloud access. */
+   guarded profile-specific operation; catalog/preview never send IPC. Explicit refresh-active requests native current-map metadata. No cloud access. */
 #include "zigma_version.h"
 #include <dirent.h>
 #include <errno.h>
