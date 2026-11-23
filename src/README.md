@@ -252,4 +252,4 @@ Both operations are enabled through the reviewed type-27 navigation message,
 with exact paired hashes, queue ownership, ID/revision and backup checks. The app
 has ClearMap but no del_local_map JSON handler. See [protocol review](../hack/ROBOJET_MAP_DELETE.md).
 Offline tests and ARM build cover this update; no robot deletion/reset was tested
-and RC17 archives have not been rebuilt.
+and the update is included in the regenerated RC17 archives.

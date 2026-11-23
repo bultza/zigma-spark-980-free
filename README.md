@@ -42,7 +42,7 @@ permissions. See [firmware variants](hack/FIRMWARE_VARIANTS.md).
 
 Maps V1.18 enables guarded native RoboJet map deletion/reset after
 [offline protocol review](hack/ROBOJET_MAP_DELETE.md). Physical validation remains
-pending; this source update is not included in the existing RC17 archives.
+pending; this update is included in the regenerated RC17 archives.
 
 RC17 recognizes both the original Issue08 RoboJet (kernel #16) and its Ciccia
 adaptation (kernel #23), using separate exact component profiles. The original

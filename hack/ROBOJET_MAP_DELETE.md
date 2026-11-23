@@ -5,7 +5,7 @@ Maps V1.18 enables these operations for app SHA256
 and navigation SHA256
 `f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c`.
 This is an offline protocol review and implementation; physical deletion/reset
-and persistence after reboot have not been tested. RC17 archives are unchanged.
+and persistence after reboot have not been tested. Included in the regenerated RC17 archives.
 
 ## Binary findings
 

@@ -48,7 +48,7 @@ configuration, missing coordinates, unsupported restriction types and changed
 map/base snapshots are rejected rather than guessed. Command dispatch and
 configuration readback are distinct from physical navigation validation.
 
-See [native deletion/reset protocol](ROBOJET_MAP_DELETE.md). Maps V1.18 is a source/build update after RC17; existing release archives have not been rebuilt.
+See [native deletion/reset protocol](ROBOJET_MAP_DELETE.md). Maps V1.18 is included in the regenerated RC17 archives.
 
 ## Installer profiles
 
