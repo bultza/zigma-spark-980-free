@@ -31,7 +31,7 @@ The installer will be able to access and expose the SSH of your robots for these
 - **Redmond RV-R670S** - I need beta testers so please try the installer and report with an issue!
 - **Redmond RV-R650S** - It has not lidar but it should be possible to at least get a SSH terminal.
 
-## Firmware variants and RC16 findings
+## Firmware variants and RC17 findings
 
 Compatibility is selected by flash layout and exact component hashes, not by the
 model name alone. The **Issue10** direct kernel16 profile is included, with its
@@ -39,6 +39,11 @@ reviewed startup scripts and existing Zigma navigation/app pair. Its original
 hardware installation and cold boot still need owner validation. Unknown or mixed
 components retain the installer fallback rather than inheriting another profile's
 permissions. See [firmware variants](hack/FIRMWARE_VARIANTS.md).
+
+RC17 also recognizes the Issue10 adaptation for Ciccia (`ciccia-issue10-kernel23`),
+alongside the original `ciccio-issue10-kernel16`. Both use strict component hashes;
+the adapted profile was checked against the prepared NOR. Original and adapted
+RoboJet profiles and Maps V1.18 deletion/reset remain included.
 
 Maps V1.18 enables guarded native RoboJet map deletion/reset after
 [offline protocol review](hack/ROBOJET_MAP_DELETE.md). Physical validation remains

@@ -88,6 +88,40 @@ class FirmwareChecks(unittest.TestCase):
                 self.assertEqual(self.run_checks(base, changed=changed, catalog=old)[0],
                                  self.run_checks(base, changed=changed)[0])
 
+    def test_issue10_ciccia_exact_components(self):
+        base = 'ciccia-hybrid-01b-kernel23'
+        cp = next(p for p in CATALOG['variants'][base]['component_profiles']
+                  if p['name'] == 'ciccia-issue10-kernel23')
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(base, changed=cp['files'], requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/usr/bin:/usr/lib:/lib')
+            self.assertIn('Firmware recognized: ciccia-issue10-kernel23', output)
+        for path in cp['files']:
+            for value in (None, 'a'*64):
+                changed = dict(cp['files']); changed[path] = value
+                with self.subTest(path=path, value=value):
+                    self.assertTrue(self.run_checks(base, changed=changed)[0].startswith('RESULT:ssh:1:'))
+        changed = dict(cp['files'])
+        changed['/root/modules/8189fs.ko'] = CATALOG['variants']['direct-kernel16']['files']['/root/modules/8189fs.ko']
+        self.assertTrue(self.run_checks(base, changed=changed)[0].startswith('RESULT:ssh:1:'))
+
+    def test_issue10_ciccia_preserves_existing_profiles(self):
+        old = copy.deepcopy(CATALOG)
+        variant = old['variants']['ciccia-hybrid-01b-kernel23']
+        variant['component_profiles'] = [p for p in variant['component_profiles']
+                                         if p['name'] != 'ciccia-issue10-kernel23']
+        variant.pop('component_selector_files')
+        for base, variant in old['variants'].items():
+            cases = [{}] + [p['files'] for p in variant.get('native_pairs', [])]
+            cases += [p['files'] for p in variant.get('component_profiles', [])]
+            for case in cases:
+                for mutation in ({}, {APP: 'a'*64}, {NAV: None},
+                                 {'/root/etc/init.d/S70yg': 'a'*64}):
+                    changed = dict(case); changed.update(mutation)
+                    with self.subTest(base=base, mutation=mutation):
+                        self.assertEqual(self.run_checks(base, changed=changed, catalog=old)[0],
+                                         self.run_checks(base, changed=changed)[0])
+
     def test_issue10_selector_validation(self):
         for value in ('bad', ['/tmp/unreviewed'], [APP],
                       ['/root/etc/init.d/S70yg']*2, [None]):

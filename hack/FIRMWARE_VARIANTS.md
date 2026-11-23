@@ -94,3 +94,13 @@ Distinguish the selected zone from the zone retained by existing processes and
 from the zone used to parse historical logs. Do not adjust UTC to compensate for
 a timezone mismatch. RoboJet's mismatch was confirmed; the checked Ciccio and
 Caccamora installations were consistent. Other variants remain unverified.
+
+### Issue10 adapted for Ciccia (RC17)
+
+`ciccia-issue10-kernel23` enables Tools/Full for the prepared Issue10 adaptation.
+Its 20 component hashes were verified against the adapted NOR. It retains the
+Issue10 native pair and S70yg script, with Ciccia DTB, kernel #23 and Wi-Fi module.
+Selection uses the native pair plus S70yg within the existing Ciccia direct base;
+all components are checked strictly. The original `ciccio-issue10-kernel16` and
+both RoboJet profiles remain supported. Physical installation/cold boot validation
+is separate from offline recognition. No firmware files are replaced by detection.
