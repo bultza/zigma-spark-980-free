@@ -79,7 +79,7 @@ if test "$profile" = full;then
   test -x "$command" || fail "Missing full-profile dependency: $command"
  done
  for dir in /root/etc/crontabs; do safe_dir "$dir"; done
- for path in /root/hostname /root/.profile /root/etc/crontabs/root /root/bin/zigma-time-sync /root/etc/init.d/S01time /root/etc/init.d/S03zigma-hostname /root/etc/init.d/S96ntpsync /root/etc/init.d/S97crond; do
+ for path in /root/hostname /root/.profile /root/etc/crontabs/root /root/bin/zigma-time-sync /root/etc/init.d/S01time /root/etc/init.d/S03zigma-hostname /root/etc/init.d/S04zigma-timezone /root/etc/init.d/S51hoslam /root/etc/init.d/S96ntpsync /root/etc/init.d/S97crond; do
   test ! -L "$path" || fail "Conflicting support symlink: $path"
   test ! -e "$path" || test -f "$path" || fail "Conflicting support target: $path"
  done

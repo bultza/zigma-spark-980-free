@@ -14,7 +14,9 @@ static const struct zigma_app_profile zigma_app_profiles[]={
  {"puron","784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912",0x48980,0x49870,0x48ab6,0x4989c,96},
  /* Issue04 recv_packet: 100-byte state; classified zones at 0x4ab60+0x28,
   * allocated/copied as 4 + 36*count. Original Ciccia navigation is separate. */
- {"zigma-issue04","8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c",0x49c44,0x4ab5c,0x49d92,0x4ab88,100}
+ {"zigma-issue04","8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c",0x49c44,0x4ab5c,0x49d92,0x4ab88,100},
+ /* Legacy split wall/polygon format; zones field is polygon pointer only. */
+ {"robojet-issue08","8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c",0x4395c,0x43e08,0x43a7e,0x43e28,92}
 };
 static inline const struct zigma_app_profile *zigma_app_profile_hash(const char *hash){
  for(size_t i=0;i<sizeof(zigma_app_profiles)/sizeof(*zigma_app_profiles);i++)if(!strcmp(hash,zigma_app_profiles[i].sha256))return &zigma_app_profiles[i];

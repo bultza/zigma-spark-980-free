@@ -19,7 +19,7 @@ class ZoneCacheStartup(unittest.TestCase):
             env=dict(os.environ, base=directory, ram=directory, DIGEST=digest)
             script='set -eu\nexport base ram\napp_pid=123\nsha256sum() { printf "%s  executable\\n" "$DIGEST"; }\n'
             for identity in identities:
-                script+='native_key='+identity+'\n'+block+'\n'
+                script+='app_sha='+digest+'\nnative_key='+identity+'\n'+block+'\n'
             subprocess.run(['sh'],input=script,text=True,env=env,check=True,capture_output=True)
             calls=(root/'calls').read_text().splitlines() if (root/'calls').exists() else []
             return calls,(root/'zones-request.identity').read_text().strip() if (root/'zones-request.identity').exists() else None
@@ -28,6 +28,14 @@ class ZoneCacheStartup(unittest.TestCase):
         calls,marker=self.check_runs(ISSUE04,['1:10:2:20','1:10:2:20','3:30:4:40'])
         self.assertEqual(calls,['--refresh-cache','--refresh-cache'])
         self.assertEqual(marker,'3:30:4:40')
+
+    def test_robojet_once_and_failed_retry(self):
+        digest='8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c'
+        calls,marker=self.check_runs(digest,['1:10:2:20','1:10:2:20'])
+        self.assertEqual(calls,['--refresh-cache'])
+        self.assertEqual(marker,'1:10:2:20')
+        calls,marker=self.check_runs(digest,['1:10:2:20'],fail=True)
+        self.assertEqual(calls,['--refresh-cache']);self.assertIsNone(marker)
 
     def test_other_profiles_send_no_configuration_request(self):
         for digest in ('4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a',
@@ -38,6 +46,15 @@ class ZoneCacheStartup(unittest.TestCase):
     def test_failure_does_not_publish_success_marker(self):
         calls,marker=self.check_runs(ISSUE04,['1:10:2:20'],fail=True)
         self.assertEqual(calls,['--refresh-cache']);self.assertIsNone(marker)
+
+    def test_robojet_exact_pair_only(self):
+        text=SERVICE.read_text()
+        block=text[text.index('  # RC15 owner-supervised'):text.index('  native_ids',text.index('  # RC15 owner-supervised'))]
+        app='8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c'
+        nav='f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c'
+        for a,n,expected in [(app,nav,0),(app,'b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255',1),(ISSUE04,nav,1),('unknown',nav,1)]:
+            script='set -eu\napp_pid=1\nnav_pid=2\nsha256sum() { case "$1" in /proc/1/exe) echo '+a+';; *) echo '+n+';; esac; }\n'+block
+            self.assertEqual(subprocess.run(['sh'],input=script,text=True,capture_output=True).returncode,expected)
 
     def test_native_hash_gate_accepts_both_issue04_combinations(self):
         text = SERVICE.read_text()

@@ -42,7 +42,7 @@ static bool laser_tick(const char *dir,long long now){
  if(laser_fd>=0&&(!ticks||ticks!=laser_ticks))laser_close();
  if(laser_fd<0&&now-laser_attempt>=3000){
   laser_attempt=now;char p[64];
-  if(ticks&&zigma_native_process(nav_pid,"/root/hoslam/demo_rplidar")&&profile&&ticks==zigma_start_ticks(nav_pid)){
+  if(ticks&&zigma_native_process(nav_pid,"/root/hoslam/demo_rplidar")&&profile&&profile->slot&&ticks==zigma_start_ticks(nav_pid)){
    snprintf(p,sizeof p,"/proc/%d/mem",nav_pid);laser_fd=open(p,O_RDONLY|O_CLOEXEC);laser_ticks=ticks;
   }
  }

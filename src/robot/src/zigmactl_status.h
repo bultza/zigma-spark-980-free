@@ -63,7 +63,6 @@ static int ctl_status(bool json) {
   if(cJSON_IsNumber(battery))printf("Battery: %.0f%%\n",battery->valuedouble);else puts("Battery: unknown");
   printf("Error: %s\nTelemetry: %s\n",cJSON_GetObjectItemCaseSensitive(out,"error")->valuestring,quality);
   if(ts>0&&age>=0)printf("Last observation: %.0f seconds ago\n",floor(age));
-  if(!fresh)puts("Values are not confirmed current.");
   cJSON *duration=nv(out,"clean_time_s"),*area=nv(out,"clean_area_m2");
   if(cJSON_IsNumber(duration))printf("Cleaning time: %.0f min %.0f s\n",floor(duration->valuedouble/60),fmod(duration->valuedouble,60));else puts("Cleaning time: unavailable");
   if(cJSON_IsNumber(area))printf("Cleaned area: %.2f m2\n",area->valuedouble);else puts("Cleaned area: unavailable");
@@ -71,8 +70,12 @@ static int ctl_status(bool json) {
   if(cJSON_IsNumber(nv(wifi,"signal_dbm")))printf(" (%.0f dBm)",nn(wifi,"signal_dbm"));
   if(cJSON_IsString(nv(wifi,"ipv4")))printf(" · %s",ns(wifi,"ipv4"));
   puts("");
-  if(cJSON_IsTrue(nv(position,"available")))printf("Position (cached): x=%.2f, y=%.2f cells; heading=%.3f rad; map=%s; resolution=%.3f m/cell\n",nn(position,"x"),nn(position,"y"),nn(position,"heading"),ns(position,"map_id"),nn(position,"resolution_m"));
-  else puts("Position: unavailable (no recent validated map pose)");
+  if(cJSON_IsTrue(nv(position,"available"))){
+   printf("Position (%s, %s): x=%.2f, y=%.2f cells; map=%s",ns(position,"quality"),ns(position,"source"),nn(position,"x"),nn(position,"y"),ns(position,"map_id"));
+   if(cJSON_IsNumber(nv(position,"heading")))printf("; heading=%.3f rad",nn(position,"heading"));else printf("; heading unavailable");
+   if(cJSON_IsNumber(nv(position,"age_s")))printf("; received/read %.0f s ago",nn(position,"age_s"));else printf("; age unknown");
+   puts("; measurement time unknown");
+  }else puts("Position: unavailable");
  }
  cJSON_Delete(in);cJSON_Delete(out);return available?0:1;
 }

@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.8 (packaged 2026-11-20T00:00:00+01:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.10 (packaged 2026-11-23T00:00:00+01:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Persistent own runtime; telemetry, demand markers and process logs remain in RAM.
@@ -95,14 +95,20 @@ case "${1:-}" in
   done
   test "/proc/$app_pid/exe" -ef /root/app_server/wifi_app_server_grit
   test "/proc/$nav_pid/exe" -ef /root/hoslam/demo_rplidar
+  # RC15 owner-supervised trial: accept RoboJet only as its exact native pair.
+  app_sha=$(sha256sum /proc/$app_pid/exe | cut -d ' ' -f 1)
+  nav_sha=$(sha256sum /proc/$nav_pid/exe | cut -d ' ' -f 1)
+  if test "$app_sha" = 8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c || test "$nav_sha" = f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c;then
+   test "$app_sha:$nav_sha" = 8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c:f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c || exit 1
+  fi
   # Recognize reviewed app-server builds; protocol and memory compatibility are separate.
   case "$(sha256sum /proc/$app_pid/exe | cut -d ' ' -f 1)" in
-   4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a|784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912|8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c) :;;
+   4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a|784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912|8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c|8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c) :;;
    *) exit 1;;
   esac
   # Recognize reviewed navigation builds; memory layout checks remain in the observer.
   case "$(sha256sum /proc/$nav_pid/exe | cut -d ' ' -f 1)" in
-   b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255|6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8|1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664) :;;
+   b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255|6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8|1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664|f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c) :;;
    *) exit 1;;
   esac
   native_ids
@@ -122,7 +128,7 @@ case "${1:-}" in
   # One configuration read per native process identity, never periodic polling.
   # Issue04 does not populate the zone cache on its own at startup.
   if test "$native_key" != "$(cat "$ram/zones-request.identity" 2>/dev/null || true)";then
-   if test "$(sha256sum /proc/$app_pid/exe | cut -d ' ' -f 1)" != 8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c || "$base/zigma-zones-arm" --refresh-cache;then
+   if { test "$app_sha" != 8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c && test "$app_sha" != 8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c; } || "$base/zigma-zones-arm" --refresh-cache;then
     printf '%s\n' "$native_key" >"$ram/zones-request.identity"
    fi
   fi

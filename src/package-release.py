@@ -41,7 +41,7 @@ def stage_package(root):
         ),
         'robot': (
             'activate.sh', 'configure-support.sh', 'install.sh.in', 'storage.sh',
-            'vendor-hosts.sh', 'init/S01time', 'init/S03zigma-hostname',
+            'vendor-hosts.sh', 'init/S01time', 'init/S03zigma-hostname', 'init/S04zigma-timezone',
             'init/S96ntpsync', 'init/S97crond', 'init/S98zigma-free',
             'src/firmware-profile.sh', 'src/zigma-cron', 'src/zigma-free-service', 'src/zigma-mode',
             'src/zigma-mode-backend', 'src/zigma-settings', 'src/zigma-time-sync',

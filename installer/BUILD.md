@@ -266,3 +266,50 @@ This build extends the RC12 checkout, preserving earlier profiles. It recognizes
 Observer V1.17 supports the independently traced Russian scan/pose layout, zones V1.6 supports its configuration query, and service V1.8 accepts the native navigation hash. Static disassembly establishes dispatcher type16 at 0x76faa, handler 0x77e20 and type17 response at 0x77e60. Original navigation and Wi-Fi remain on the original robot; Ciccia's adapted pair remains separate.
 
 Offline acceptance, negative catalogue tests, navigation/map/zone regressions and ARM builds are required. Physical installation, live LiDAR/pose, no-go editing and map restoration on the original Russian robot remain user validation items. Issue06 has confirmed the same native binary hashes and RTL8723DS identification, not all other hashes; unexpected base or script differences still retain SSH-only with diagnostics. Existing packaged RC11/RC12 archives are not overwritten.
+
+
+## RC15: RoboJet X-One Issue08 trial on Ciccia
+
+This release enables the exact `ciccia-robojet-issue08-kernel23` component
+profile for an owner-supervised installation trial. It checks the adapted
+image's DTB/kernel/rootfs, native app/navigation/client, driver and startup
+scripts without replacing vendor files. Other native combinations do not
+inherit this exception. The service accepts the RoboJet app/navigation only
+as an exact pair. Existing firmware profiles and activation rollback remain.
+
+Includes observer V1.19, agent V1.29, zigmactl V1.13, service V1.9 and updated
+web assets. RoboJet navigation RAM/LiDAR is disabled; position falls back to
+map data, with source/quality and no invented heading. Legacy walls and zones
+are read-only. Raw statistics units, full IPC behavior and real map output
+remain physical validation items. No manual-drive experiments or repair
+payloads are included. This supersedes the earlier source-only gate status.
+
+
+### Selected timezone at native startup
+
+Full installations now stage `S04zigma-timezone`, after storage setup and before
+vendor applications. It overlays `/etc/profile` with a private RAM copy which
+preserves the vendor settings and ends with `TZ=:/root/etc/localtime`.
+This overrides a firmware `TZ=CST-8` assignment without writing the read-only
+rootfs. The mount is recreated at each boot and refuses an unrelated existing
+profile mount. An absent selected timezone leaves the vendor profile untouched.
+
+The native `S51hoslam` launcher does not source that profile, so the journaled
+installer also inserts the same timezone selection after its shebang. Both
+changes preserve the existing launch commands, calibration and process control.
+`S50app` already sources `/etc/profile`. New interactive SSH logins also source
+it. Web/settings/cron retain their existing selected-zone behavior.
+
+Staging this change does not restart native services or adjust UTC/RTC time.
+It applies on the next boot; the current native processes may still use their
+previous TZ, and changing the zone later does not guarantee that all running
+vendor processes reload it. Historical log timestamps are not rewritten.
+Existing binary/web-only upgrades do not install these startup adaptations;
+existing robots require a targeted, backed-up startup update. Existing release
+archives have not been regenerated.
+
+Validation: `python3 -m unittest discover -s installer/tests -p test_boot_timezone.py`
+checks profile precedence, preserved settings, winter/summer offsets, unchanged
+Unix timestamps, idempotence, absent zone and conflicting profile mount handling,
+and navigation launcher staging without starting navigation. Bind mounts are
+simulated in host tests; a physical next-boot check remains required.

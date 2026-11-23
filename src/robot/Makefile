@@ -26,7 +26,7 @@ $(OUTPUT)/free-zigma-agent-arm: src/zigma_agent.c src/zigma_nor_backup.c $(CJSON
 $(OUTPUT)/zigma-observe-arm: src/zigma_observe.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-core-arm: src/zigma_core.c src/zigma_local_ipc.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-network-arm: src/zigma_network.c
-$(OUTPUT)/zigma-area-arm: src/zigma_area.c
+$(OUTPUT)/zigma-area-arm: src/zigma_area.c $(CRYPTO)
 $(OUTPUT)/zigma-zones-arm: src/zigma_zones.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-maps-arm: src/zigma_maps.c $(CJSON) $(CRYPTO)
 $(OUTPUT)/zigma-options-arm: src/zigma_options.c
@@ -96,3 +96,9 @@ test-app-profiles:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_app_profiles.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-app-profiles
 	build/tests/test-app-profiles
+
+.PHONY: test-robojet
+test-robojet:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_robojet.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-robojet
+	build/tests/test-robojet

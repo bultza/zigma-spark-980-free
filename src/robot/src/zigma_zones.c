@@ -14,6 +14,7 @@
 #include "cJSON.h"
 /* Exact running-image profiles. Queue receivers may be thread IDs. */
 static int zones_profile_hash(const char *hash){
+ if(!strcmp(hash,"8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c"))return 3;
  if(!strcmp(hash,"784fbcda505db72675bf01a82f5b02f6eca8cb313a7916176ed7bbf10d7dd912"))return 2;
  if(!strcmp(hash,"4cf0709919f0e894a5d3ed1c60ca9d6bf11d7c47120077e23f6c13902c5d9a9a")||!strcmp(hash,"8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c"))return 1;
  return 0;
@@ -25,19 +26,11 @@ static bool zones_navigation_hash(const char *hash){
         !strcmp(hash,"6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8")||
         !strcmp(hash,"1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664");
 }
-static bool zones_receiver_hash(int q,const char *expected,char hash[65]){
- struct msqid_ds info;if(msgctl(q,IPC_STAT,&info)||!zigma_native_process(info.msg_lrpid,expected))return false;
- char path[64];snprintf(path,sizeof path,"/proc/%d/exe",info.msg_lrpid);
- FILE *f=fopen(path,"rb");if(!f)return false;
- mbedtls_sha256_context ctx;mbedtls_sha256_init(&ctx);int rc=mbedtls_sha256_starts(&ctx,0);
- unsigned char bytes[8192],digest[32];size_t n;
- while(!rc&&(n=fread(bytes,1,sizeof bytes,f)))rc=mbedtls_sha256_update(&ctx,bytes,n);
- if(ferror(f))rc=1;
- if(!rc)rc=mbedtls_sha256_finish(&ctx,digest);
- fclose(f);mbedtls_sha256_free(&ctx);if(rc)return false;
- for(int i=0;i<32;i++)snprintf(hash+2*i,3,"%02x",digest[i]);
- return true;
+static bool zones_refresh_pair(const char *app,const char *nav){
+ int profile=zones_profile_hash(app);
+ return profile==3?!strcmp(nav,"f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c"):(profile&&zones_navigation_hash(nav));
 }
+#include "zigma_queue_identity.h"
 /* Puron lacks forbidden_zone_info and its legacy parser truncates the cache
  * allocation/copy to 4*(count+1). Use the classified-quads protocol directly.
  * This route was verified with original navigation; the exact Puron image is
@@ -56,10 +49,24 @@ static void zones_native_message(cJSON *zones,unsigned char text[4096]){
   }
  }
 }
+/* RoboJet's JSON parser uses flat arrays and preserves walls when their keys
+ * are absent. Native 0x1d4de uses 32 bytes/quad, 0x1d588 negates Y, and
+ * 0x1d506 sends type6; the parser requests type16 readback at 0x1cd3e.
+ * Never send classified 36-byte records to this navigation build. */
+static char *zones_robojet_payload(cJSON *zones){
+ cJSON *o=cJSON_CreateObject();cJSON_AddStringToObject(o,"ProtocolVersion","1.0");cJSON_AddStringToObject(o,"cmd_origin","app");
+ cJSON *xs=cJSON_AddArrayToObject(o,"forbidden_zone_x"),*ys=cJSON_AddArrayToObject(o,"forbidden_zone_y"),*z;
+ cJSON_ArrayForEach(z,zones){
+  if(!cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(z,"can_clean"))||!cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(z,"can_mop"))){cJSON_Delete(o);return NULL;}
+  for(int j=0;j<4;j++){cJSON_AddItemToArray(xs,cJSON_Duplicate(cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(z,"x"),j),1));cJSON_AddItemToArray(ys,cJSON_Duplicate(cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(z,"y"),j),1));}
+ }
+ char *payload=cJSON_PrintUnformatted(o);cJSON_Delete(o);return payload;
+}
 static int zones_send(int profile,int q,cJSON *zones,const char *payload){
- if(profile!=1&&profile!=2)return 1;
+ if(profile!=1&&profile!=2&&profile!=3)return 1;
  struct {long type;unsigned char text[4096];} message={1,{0}};
  if(profile==2){message.type=6;zones_native_message(zones,message.text);}
+ else if(profile==3){char *legacy=zones_robojet_payload(zones);if(!legacy)return 1;size_t n=strlen(legacy);if(n>=sizeof message.text){free(legacy);return 1;}memcpy(message.text,legacy,n);free(legacy);}
  else memcpy(message.text,payload,strlen(payload));
  if(q<0||msgsnd(q,&message,sizeof(message.text),IPC_NOWAIT)){perror("Zones not dispatched");return 1;}
 
@@ -76,7 +83,7 @@ static int zones_send(int profile,int q,cJSON *zones,const char *payload){
 static int zones_refresh_cache(void){
  key_t ak=ftok("/",1),nk=ftok("/",14);if(ak==(key_t)-1||nk==(key_t)-1)return 1;
  int aq=msgget(ak,0),nq=msgget(nk,0);char app[65],nav[65];
- if(aq<0||nq<0||!zones_receiver_hash(aq,"/root/app_server/wifi_app_server_grit",app)||!zones_profile_hash(app)||!zones_receiver_hash(nq,"/root/hoslam/demo_rplidar",nav)||!zones_navigation_hash(nav))return 1;
+ if(aq<0||nq<0||!zones_receiver_hash(aq,"/root/app_server/wifi_app_server_grit",app)||!zones_profile_hash(app)||!zones_receiver_hash(nq,"/root/hoslam/demo_rplidar",nav)||!zones_refresh_pair(app,nav))return 1;
  struct {long type;unsigned char text[4096];} message={16,{0}};
  if(msgsnd(nq,&message,sizeof message.text,IPC_NOWAIT)){perror("Configuration read not dispatched");return 1;}
  return 0;
@@ -96,11 +103,13 @@ int main(int argc,char **argv){
  key_t key=ftok("/",1);int q=key==(key_t)-1?-1:msgget(key,0);char hash[65];
  int profile=q>=0&&zones_receiver_hash(q,"/root/app_server/wifi_app_server_grit",hash)?zones_profile_hash(hash):0;
  if(!profile){fprintf(stderr,"Unsupported app-server identity; zones not dispatched\n");cJSON_Delete(o);free(payload);return 1;}
- if(profile==2){
+ if(profile==2||profile==3){
   key=ftok("/",14);q=key==(key_t)-1?-1:msgget(key,0);
-  if(q<0||!zones_receiver_hash(q,"/root/hoslam/demo_rplidar",hash)||!zones_navigation_hash(hash)){
-   fprintf(stderr,"Unsupported Puron navigation identity; zones not dispatched\n");cJSON_Delete(o);free(payload);return 1;
+  int nq=q;
+  if(nq<0||!zones_receiver_hash(nq,"/root/hoslam/demo_rplidar",hash)||(profile==3?strcmp(hash,"f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c")!=0:!zones_navigation_hash(hash))){
+   fprintf(stderr,"Unsupported navigation identity; zones not dispatched\n");cJSON_Delete(o);free(payload);return 1;
   }
  }
+ if(profile==3){key=ftok("/",1);q=key==(key_t)-1?-1:msgget(key,0);if(q<0||!zones_receiver_hash(q,"/root/app_server/wifi_app_server_grit",hash)||zones_profile_hash(hash)!=3){cJSON_Delete(o);free(payload);return 1;}}
  int rc=zones_send(profile,q,zones,payload);cJSON_Delete(o);free(payload);return rc;
 }

@@ -97,6 +97,7 @@ static int nav_move(int x,int y,bool dock,bool block,int timeout){
  cJSON *m=dock?NULL:nav_read(mapfile),*s=nav_status();int rc=3;
  if(!nav_link(s)||strcmp(ns(s,"error"),"NoError")||(!dock&&!nav_idle(s))){fprintf(stderr,"Idle robot and recent local communication required\n");goto done;}
  if(!dock&&!nav_map(m,x,y)){fprintf(stderr,"Destination is outside the current map or map unavailable\n");goto done;}
+ if(!dock&&block&&cJSON_IsFalse(nv(nv(s,"navigation_support"),"memory_reads"))){fprintf(stderr,"Arrival verification unavailable for this navigation build; destination not sent\n");goto done;}
  if(dock&&block&&!strcmp(ns(s,"working_status"),"PileCharging")){rc=0;goto done;}
  /* Native numeric FanStatus uses percent command 0x39, unlike None (0x24/11).
   * Physical effect throughout navigation still needs supervised validation. */

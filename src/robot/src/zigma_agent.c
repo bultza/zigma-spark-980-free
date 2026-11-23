@@ -112,7 +112,7 @@ static bool safe_path(const char *s) {
  for(;*s;s++)if(!isalnum((unsigned char)*s)&&!strchr("/._-",*s))return false;
  return true;
 }
-static int run_process(char *const argv[],char *output,size_t cap) {
+static int run_process_timed(char *const argv[],char *output,size_t cap,int timeout_s) {
  int pipes[2];if(pipe(pipes))return -1;
  pid_t child=fork(); if(child<0){close(pipes[0]);close(pipes[1]);return -1;}
  if(!child){dup2(pipes[1],STDOUT_FILENO);int null=open("/dev/null",O_RDWR);dup2(null,STDIN_FILENO);dup2(null,STDERR_FILENO);close(pipes[0]);close(pipes[1]);execv(argv[0],argv);_exit(127);}
@@ -124,13 +124,14 @@ static int run_process(char *const argv[],char *output,size_t cap) {
   pid_t w=waitpid(child,&status,WNOHANG);if(w==child)done=true;
   else if(w<0){close(pipes[0]);return -1;}
   clock_gettime(CLOCK_MONOTONIC,&now);
-  if(!done&&now.tv_sec-start.tv_sec>=4){kill(child,SIGKILL);waitpid(child,&status,0);close(pipes[0]);return -1;}
+  if(!done&&now.tv_sec-start.tv_sec>=timeout_s){kill(child,SIGKILL);waitpid(child,&status,0);close(pipes[0]);return -1;}
   if(!done){struct timespec pause={0,10000000};nanosleep(&pause,NULL);}
  }
  // Drain after the child exits.
  if(output){ssize_t n;while((n=read(pipes[0],output+used,cap-used-1))>0)used+=(size_t)n;output[used]=0;}
  close(pipes[0]);return WIFEXITED(status)?WEXITSTATUS(status):-1;
 }
+static int run_process(char *const argv[],char *output,size_t cap){return run_process_timed(argv,output,cap,4);}
 static void now_local(struct tm *tm,time_t *epoch) { *epoch=time(NULL);localtime_r(epoch,tm); }
 static bool valid_time(const char *s) {
  return strlen(s)==5&&isdigit((unsigned char)s[0])&&isdigit((unsigned char)s[1])&&s[2]==':'&&isdigit((unsigned char)s[3])&&isdigit((unsigned char)s[4])&&atoi(s)<24&&atoi(s+3)<60;
@@ -279,7 +280,7 @@ static cJSON *status_json(void) {
   if(!get(o,"working_status"))setstr(o,"working_status","unknown");
   setstr(o,"source","external_status_file");
  }
- cJSON *caps=cJSON_CreateObject();cJSON_AddBoolToObject(caps,"basic_control",!strcmp(mode,"demo")||control_bin);cJSON_AddBoolToObject(caps,"map_edit",!reset_waiting()&&(!strcmp(mode,"demo")||zones_bin));cJSON_AddBoolToObject(caps,"area_clean",!reset_waiting()&&(!strcmp(mode,"demo")||area_bin));cJSON_AddItemToObject(o,"capabilities",caps);
+ cJSON *caps=cJSON_CreateObject();cJSON_AddBoolToObject(caps,"basic_control",!strcmp(mode,"demo")||control_bin);cJSON_AddBoolToObject(caps,"map_edit",!reset_waiting()&&(!strcmp(mode,"demo")||zones_bin));cJSON_AddBoolToObject(caps,"area_clean",!reset_waiting()&&(!strcmp(mode,"demo")||area_bin));cJSON_AddBoolToObject(caps,"zone_restriction_classes",strcmp(str(o,"app_server_profile",""),"robojet-issue08")!=0);cJSON_AddItemToObject(o,"capabilities",caps);
  setbool(o,"map_reset_pending",reset_waiting());cJSON *transition=get(state,"map_reset_pending");if(transition&&!strcmp(str(transition,"operation",""),"restore"))cJSON_AddItemToObject(o,"map_restore",cJSON_Duplicate(transition,1));
  if(reset_waiting()||time(NULL)-num(transition,"completed_at",0)<15)cJSON_DeleteItemFromObjectCaseSensitive(o,"navigation_pose");
  cJSON *geometry=get(o,"map_geometry");double geometry_age=time(NULL)-num(geometry,"cache_read_at",0);
@@ -301,7 +302,7 @@ static bool issue_area(cJSON *body,char *err,size_t cap){
  if(v[0]<0||v[1]<0||v[2]<2||v[3]<2||v[0]+v[2]>num(map,"width",0)||v[1]+v[3]>num(map,"height",0)){snprintf(err,cap,"Select a valid rectangle inside the map");goto done;}
  double native[4]={v[0]-xy[0],v[1]-xy[1],v[0]+v[2]-xy[0],v[1]+v[3]-xy[1]};for(int i=0;i<4;i++)if(fabs(native[i])>20000){snprintf(err,cap,"Rectangle exceeds local protocol limits");goto done;}
  st=status_json();const char *work=str(st,"working_status","unknown");bool available=cJSON_IsTrue(get(st,"fresh"))||(cJSON_IsTrue(get(st,"cache_available"))&&cJSON_IsTrue(get(st,"local_link_active")));
- if(!available||strcmp(str(st,"error","unknown"),"NoError")||(strcmp(work,"PileCharging")&&strcmp(work,"DirCharging")&&strcmp(work,"Standby")&&strcmp(work,"Pause")&&strcmp(work,"charging")&&strcmp(work,"idle")&&strcmp(work,"paused"))){snprintf(err,cap,"Area cleaning requires an idle robot with confirmed local communication and no error");goto done;}
+ if(!available||strcmp(str(st,"error","unknown"),"NoError")||(strcmp(work,"PileCharging")&&strcmp(work,"DirCharging")&&strcmp(work,"Standby")&&strcmp(work,"Pause")&&strcmp(work,"charging")&&strcmp(work,"idle")&&strcmp(work,"paused")&&(strcmp(str(st,"app_server_profile",""),"robojet-issue08")||strcmp(work,"Hibernating")))){snprintf(err,cap,"Area cleaning requires an idle robot with confirmed local communication and no error");goto done;}
  char values[4][24];for(int i=0;i<4;i++)snprintf(values[i],sizeof(values[i]),"%.0f",native[i]);char *args[]={(char*)area_bin,values[0],values[1],values[2],values[3],NULL};
  if(run_process(args,NULL,0)){snprintf(err,cap,"Area command failed or timed out; check the robot before retrying");goto done;}
  event("command","Area command dispatched; waiting for robot feedback");ok=true;
@@ -319,8 +320,8 @@ static cJSON *zone_from_rect(cJSON *r,cJSON *flags,cJSON *map){
 }
 static bool same_zone_point(cJSON *a,cJSON *b){const char *keys[]={"x","y"};for(int i=0;i<2;i++){cJSON *x=get(a,keys[i]),*y=get(b,keys[i]);if(!cJSON_IsNumber(x)||!cJSON_IsNumber(y)||!isfinite(x->valuedouble)||!isfinite(y->valuedouble)||fabs(x->valuedouble-y->valuedouble)>0.00001)return false;}return true;}
 static bool same_polygon(cJSON *a,cJSON *b){
- if(!cJSON_IsArray(a)||!cJSON_IsArray(b)||cJSON_GetArraySize(a)!=4||cJSON_GetArraySize(b)!=4)return false;
- for(int direction=-1;direction<=1;direction+=2)for(int offset=0;offset<4;offset++){bool equal=true;for(int i=0;i<4;i++)if(!same_zone_point(cJSON_GetArrayItem(a,i),cJSON_GetArrayItem(b,(offset+direction*i+4)%4))){equal=false;break;}if(equal)return true;}
+ int n=cJSON_GetArraySize(a);if(!cJSON_IsArray(a)||!cJSON_IsArray(b)||(n!=4&&n!=2)||cJSON_GetArraySize(b)!=n)return false;
+ for(int direction=-1;direction<=1;direction+=2)for(int offset=0;offset<n;offset++){bool equal=true;for(int i=0;i<n;i++)if(!same_zone_point(cJSON_GetArrayItem(a,i),cJSON_GetArrayItem(b,(offset+direction*i+n)%n))){equal=false;break;}if(equal)return true;}
  return false;
 }
 static bool same_zones(cJSON *a,cJSON *b){if(!cJSON_IsArray(a)||!cJSON_IsArray(b)||cJSON_GetArraySize(a)!=cJSON_GetArraySize(b))return false;for(int i=0;i<cJSON_GetArraySize(a);i++){cJSON *x=cJSON_GetArrayItem(a,i),*y=cJSON_GetArrayItem(b,i);if(!same_polygon(get(x,"points"),get(y,"points")))return false;const char *keys[]={"can_clean","can_mop"};for(int k=0;k<2;k++)if(!cJSON_Compare(get(x,keys[k]),get(y,keys[k]),1))return false;}return true;}
@@ -333,15 +334,18 @@ static bool issue_zones(cJSON *body,char *err,size_t cap){
  if(pending_target&&same_zones(get(map,"zones"),pending_target))pending_until=0;
  if(time(NULL)<pending_until){snprintf(err,cap,"Waiting for the previous zone update. Review the map before retrying");goto done;}
  st=status_json();const char *work=str(st,"working_status","");bool ready=cJSON_IsTrue(get(st,"fresh"))||(cJSON_IsTrue(get(st,"cache_available"))&&cJSON_IsTrue(get(st,"local_link_active")));
- if(!ready||strcmp(str(st,"error","unknown"),"NoError")||(strcmp(work,"charging")&&strcmp(work,"PileCharging")&&strcmp(work,"DirCharging")&&strcmp(work,"Standby")&&strcmp(work,"idle"))){snprintf(err,cap,"Zone editing requires an idle robot with confirmed local communication and no error");goto done;}
+ if(!ready||strcmp(str(st,"error","unknown"),"NoError")||(strcmp(work,"charging")&&strcmp(work,"PileCharging")&&strcmp(work,"DirCharging")&&strcmp(work,"Standby")&&strcmp(work,"idle")&&(strcmp(str(st,"app_server_profile",""),"robojet-issue08")||strcmp(work,"Hibernating")))){snprintf(err,cap,"Zone editing requires an idle robot with confirmed local communication and no error");goto done;}
  const char *op=str(body,"operation","");int count=cJSON_GetArraySize(get(map,"zones")),index=num(body,"index",-1);
  if(strcmp(op,"add")&&strcmp(op,"update")&&strcmp(op,"delete")){snprintf(err,cap,"Unknown zone operation");goto done;}
  if(strcmp(op,"add")&&(!cJSON_IsNumber(get(body,"index"))||get(body,"index")->valuedouble!=index||index<0||index>=count)){snprintf(err,cap,"Select an existing zone");goto done;}
- if(count>12||(!strcmp(op,"add")&&count>=12)){snprintf(err,cap,"Maximum 12 zones");goto done;}
- target=cJSON_Duplicate(get(map,"zones"),1);if(!strcmp(op,"delete"))cJSON_DeleteItemFromArray(target,index);else{cJSON *z=zone_from_rect(get(body,"rect"),get(body,"flags"),map);if(!z){snprintf(err,cap,"Select a valid rectangle and restriction type");goto done;}if(!strcmp(op,"add"))cJSON_AddItemToArray(target,z);else cJSON_ReplaceItemInArray(target,index,z);}
+ bool legacy=!strcmp(str(st,"app_server_profile",""),"robojet-issue08");
+ if(legacy&&strcmp(op,"add")&&cJSON_IsTrue(get(cJSON_GetArrayItem(get(map,"zones"),index),"read_only"))){snprintf(err,cap,"Virtual walls are preserved and cannot be edited here");goto done;}
+ int editable=0;cJSON *existing;cJSON_ArrayForEach(existing,get(map,"zones"))if(!legacy||strcmp(str(existing,"kind",""),"virtual_wall"))editable++;
+ if(editable>12||(!strcmp(op,"add")&&editable>=12)){snprintf(err,cap,"Maximum 12 zones");goto done;}
+ target=cJSON_Duplicate(get(map,"zones"),1);if(!strcmp(op,"delete"))cJSON_DeleteItemFromArray(target,index);else{cJSON *z=zone_from_rect(get(body,"rect"),get(body,"flags"),map);if(z&&legacy&&(cJSON_IsTrue(get(z,"can_clean"))||cJSON_IsTrue(get(z,"can_mop")))){cJSON_Delete(z);z=NULL;}if(!z){snprintf(err,cap,"Select a valid rectangle and supported restriction type");goto done;}if(!strcmp(op,"add"))cJSON_AddItemToArray(target,z);else cJSON_ReplaceItemInArray(target,index,z);}
  wire=cJSON_CreateObject();cJSON_AddStringToObject(wire,"ProtocolVersion","1.0");cJSON_AddStringToObject(wire,"cmd_origin","app");cJSON *zones=cJSON_AddArrayToObject(wire,"forbidden_zone_info"),*z;
  cJSON *origin=get(map,"map_origin");double ox=cJSON_GetArrayItem(origin,0)->valuedouble,oy=cJSON_GetArrayItem(origin,1)->valuedouble;
- cJSON_ArrayForEach(z,target){cJSON *points=get(z,"points");if(!cJSON_IsArray(points)||cJSON_GetArraySize(points)!=4||!cJSON_IsBool(get(z,"can_clean"))||!cJSON_IsBool(get(z,"can_mop"))){snprintf(err,cap,"Existing zones have an unsupported format; nothing sent");goto done;}cJSON *w=cJSON_CreateObject(),*xs=cJSON_AddArrayToObject(w,"x"),*ys=cJSON_AddArrayToObject(w,"y");cJSON_AddItemToArray(zones,w);
+ cJSON_ArrayForEach(z,target){if(legacy&&!strcmp(str(z,"kind",""),"virtual_wall"))continue;cJSON *points=get(z,"points");if(!cJSON_IsArray(points)||cJSON_GetArraySize(points)!=4||!cJSON_IsBool(get(z,"can_clean"))||!cJSON_IsBool(get(z,"can_mop"))){snprintf(err,cap,"Existing zones have an unsupported format; nothing sent");goto done;}cJSON *w=cJSON_CreateObject(),*xs=cJSON_AddArrayToObject(w,"x"),*ys=cJSON_AddArrayToObject(w,"y");cJSON_AddItemToArray(zones,w);
   for(int i=0;i<4;i++){cJSON *p=cJSON_GetArrayItem(points,i),*x=get(p,"x"),*y=get(p,"y");if(!cJSON_IsNumber(x)||!cJSON_IsNumber(y)){snprintf(err,cap,"Invalid zone point");goto done;}double a=x->valuedouble-ox,b=y->valuedouble-oy;if(!isfinite(a)||!isfinite(b)||fabs(a)>20000||fabs(b)>20000||fabs(a-round(a))>0.00001||fabs(b-round(b))>0.00001){snprintf(err,cap,"Zone coordinates cannot be sent without loss; nothing changed");goto done;}cJSON_AddItemToArray(xs,cJSON_CreateNumber(round(a)));cJSON_AddItemToArray(ys,cJSON_CreateNumber(round(b)));}
   cJSON_AddBoolToObject(w,"can_clean",cJSON_IsTrue(get(z,"can_clean")));cJSON_AddBoolToObject(w,"can_mop",cJSON_IsTrue(get(z,"can_mop")));}
  payload=cJSON_PrintUnformatted(wire);if(!payload||strlen(payload)>=4096){snprintf(err,cap,"Zone message exceeds protocol size");goto done;}
@@ -595,17 +599,25 @@ static bool update_map_reset(void){
  if(!reset_waiting())return false;
  cJSON *pending=get(state,"map_reset_pending"),*map=demo_map(),*native=native_map_id();const char *id=str(map,"map_id","");
  bool restoring=!strcmp(str(pending,"operation",""),"restore");
- bool recovered=cJSON_IsTrue(get(map,"available"))&&cJSON_IsArray(get(map,"cells"))&&strlen(id)&&!strcmp(id,str(native,"id",""))&&cJSON_IsNumber(get(map,"snapshot_read_at"))&&get(map,"snapshot_read_at")->valuedouble>num(pending,"at",0);
+ /* A boot-time clock correction can move publication time before dispatch.
+  * A changed ID or changed snapshot still proves a new publication; native
+  * restore result/ID/time checks below remain mandatory. */
+ bool publication_new=num(map,"snapshot_read_at",0)>num(pending,"at",0);
+ if(restoring&&strlen(str(pending,"source_id",""))&&strcmp(id,str(pending,"source_id","")))publication_new=true;
+ else if(restoring&&cJSON_IsNumber(get(pending,"map_before_snapshot_at")))publication_new=num(map,"snapshot_read_at",0)!=num(pending,"map_before_snapshot_at",0);
+ bool recovered=cJSON_IsTrue(get(map,"available"))&&cJSON_IsArray(get(map,"cells"))&&strlen(id)&&!strcmp(id,str(native,"id",""))&&cJSON_IsNumber(get(map,"snapshot_read_at"))&&publication_new;
  if(restoring){
   cJSON *probe=restore_helper("restore-probe",pending);
   bool seen=cJSON_IsTrue(get(probe,"result_seen")),success=cJSON_IsTrue(get(probe,"restored"));
   if(seen&&!success&&strcmp(str(pending,"phase",""),"restore_failed")){setstr(pending,"phase","restore_failed");save_state();}
-  if(seen&&success&&!strcmp(str(probe,"id",""),str(pending,"id",""))&&!cJSON_IsTrue(get(pending,"native_confirmed"))){setbool(pending,"native_confirmed",true);save_state();}
+  /* A map may arrive before our next poll sees success. The helper parses
+   * the native log in its producer timezone, not the web timezone. */
+  if(seen&&success&&!strcmp(str(probe,"id",""),str(pending,"id",""))&&(!cJSON_IsTrue(get(pending,"native_confirmed"))||!cJSON_IsNumber(get(pending,"native_result_seen_at")))){setbool(pending,"native_confirmed",true);setnum(pending,"native_result_seen_at",time(NULL));save_state();}
   recovered=recovered&&cJSON_IsTrue(get(pending,"native_confirmed"))&&!strcmp(id,str(pending,"id",""))&&!strcmp(id,str(probe,"id",""))&&cJSON_IsNumber(get(probe,"result_at"))&&num(map,"snapshot_read_at",0)>=num(probe,"result_at",2147483647)&&strcmp(str(pending,"phase",""),"restore_failed");
   cJSON_Delete(probe);
  }else recovered=recovered&&strcmp(id,str(pending,"id",""));
  cJSON_Delete(native);cJSON_Delete(map);
- if(recovered){setstr(pending,"phase","new_map_observed");setnum(pending,"completed_at",time(NULL));event("maps",restoring?"Master restored: native success and new map publication observed":"New map observed after clear request");save_state();}
+ if(recovered){setstr(pending,"phase","new_map_observed");setnum(pending,"completed_at",time(NULL));if(restoring){cJSON *request=cJSON_Duplicate(pending,1);setstr(request,"library_dir",map_library_dir?map_library_dir:"");cJSON *cleanup=restore_helper("restore-cleanup",request);setbool(pending,"workspace_cleaned",cJSON_IsTrue(get(cleanup,"cleaned")));cJSON_Delete(cleanup);cJSON_Delete(request);}event("maps",restoring?"Master restored: native success and new map publication observed":"New map observed after clear request");save_state();}
  return recovered;
 }
 static cJSON *reset_placeholder(void){
@@ -641,7 +653,9 @@ static cJSON *saved_maps(const char *id){
  if(!cJSON_IsObject(o)||(!id&&!cJSON_IsArray(get(o,"items")))){cJSON_Delete(o);return NULL;}return o;
 }
 static cJSON *maps_helper_json(char *const args[],size_t cap){
- char *buf=calloc(cap,1);if(!buf)return NULL;cJSON *o=NULL;if(!run_process(args,buf,cap))o=strict_json(buf);free(buf);if(!cJSON_IsObject(o)){cJSON_Delete(o);return NULL;}return o;
+ char *buf=calloc(cap,1);if(!buf)return NULL;cJSON *o=NULL;/* Native map helpers hash both executable images and write protected backups. */
+ if(!run_process_timed(args,buf,cap,20)){o=strict_json(buf);}
+ free(buf);if(!cJSON_IsObject(o)){cJSON_Delete(o);return NULL;}return o;
 }
 static cJSON *map_library(const char *operation,cJSON *input){
  if(!maps_bin||!map_library_dir)return NULL;
@@ -669,7 +683,7 @@ static bool restore_master(int fd,cJSON *input){
  cJSON *context=restore_helper("restore-context",NULL);
  if(!ready||!cJSON_IsTrue(get(context,"idle"))||!saved_id(str(context,"id",""))||strcmp(str(input,"active_id",""),str(context,"id",""))||!cJSON_IsNumber(get(context,"log_inode"))||!cJSON_IsNumber(get(context,"log_offset"))){cJSON_Delete(context);error_response(fd,409,"Restore requires an idle robot, recent local communication and unchanged map identity. Refresh maps");return false;}
  cJSON *copy=map_library("preview",input);if(!copy||get(copy,"error")){cJSON_Delete(context);library_response(fd,copy);return false;}
- cJSON *pending=cJSON_Duplicate(context,1);cJSON_Delete(context);setstr(pending,"operation_uid",str(input,"operation_uid",""));setstr(pending,"operation","restore");setstr(pending,"phase","prepared");setstr(pending,"id",str(copy,"id",""));setstr(pending,"uid",str(input,"uid",""));setnum(pending,"width",num(copy,"width",0));setnum(pending,"height",num(copy,"height",0));setnum(pending,"at",time(NULL));cJSON_Delete(copy);
+ cJSON *pending=cJSON_Duplicate(context,1);setstr(pending,"source_id",str(context,"id",""));cJSON *before_map=demo_map();if(cJSON_IsNumber(get(before_map,"snapshot_read_at")))setnum(pending,"map_before_snapshot_at",num(before_map,"snapshot_read_at",0));cJSON_Delete(before_map);cJSON_Delete(context);setstr(pending,"operation_uid",str(input,"operation_uid",""));setstr(pending,"operation","restore");setstr(pending,"phase","prepared");setstr(pending,"id",str(copy,"id",""));setstr(pending,"uid",str(input,"uid",""));setnum(pending,"width",num(copy,"width",0));setnum(pending,"height",num(copy,"height",0));setnum(pending,"at",time(NULL));cJSON_Delete(copy);
  cJSON *previous=old?cJSON_Duplicate(old,1):NULL;cJSON_DeleteItemFromObjectCaseSensitive(state,"map_reset_pending");cJSON_AddItemToObject(state,"map_reset_pending",pending);
  if(!save_state()){cJSON_DeleteItemFromObjectCaseSensitive(state,"map_reset_pending");if(previous)cJSON_AddItemToObject(state,"map_reset_pending",previous);error_response(fd,500,"Restore could not be recorded; no order sent");return false;}
  cJSON *request=cJSON_Duplicate(input,1);setstr(request,"library_dir",map_library_dir);setstr(request,"source_dir",maps_dir);cJSON *result=restore_helper("restore-native",request);cJSON_Delete(request);
@@ -728,7 +742,7 @@ static cJSON *maps_catalog(void){
  }
  const char *active=str(native,"id","");
  if(saved_id(active))cJSON_AddStringToObject(o,"native_active_id",active);else cJSON_AddNullToObject(o,"native_active_id");
- cJSON_AddBoolToObject(o,"delete_available",saved_id(active)&&map_library_dir);cJSON_AddBoolToObject(o,"clear_available",saved_id(active)&&strcmp(active,"0")&&map_library_dir&&!cJSON_IsFalse(get(native,"clear_available")));cJSON_AddBoolToObject(o,"reset_pending",reset_waiting());cJSON_AddBoolToObject(o,"library_available",map_library_dir!=NULL);cJSON_Delete(native);
+ cJSON_AddBoolToObject(o,"delete_available",saved_id(active)&&map_library_dir&&!cJSON_IsFalse(get(native,"delete_available")));cJSON_AddBoolToObject(o,"clear_available",saved_id(active)&&strcmp(active,"0")&&map_library_dir&&!cJSON_IsFalse(get(native,"clear_available")));cJSON_AddBoolToObject(o,"reset_pending",reset_waiting());cJSON_AddBoolToObject(o,"library_available",map_library_dir!=NULL);cJSON_Delete(native);
  cJSON_AddStringToObject(o,"active_source","observed_map_cache");cJSON_AddNumberToObject(o,"read_at",time(NULL));
  cJSON *context=restore_helper("restore-context",NULL);if(context)cJSON_AddItemToObject(o,"restore_context",context);
  cJSON_AddBoolToObject(o,"restore_available",!strcmp(mode,"commands")&&map_library_dir&&context&&cJSON_IsTrue(get(context,"idle"))&&(!reset_waiting()||strcmp(str(get(state,"map_reset_pending"),"operation",""),"restore")||!strcmp(str(get(state,"map_reset_pending"),"phase",""),"restore_failed")));

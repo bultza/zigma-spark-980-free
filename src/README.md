@@ -107,3 +107,141 @@ from the repository root (as one command) for the relevant offline checks.
 ### Issue04 original navigation reader
 
 Observer V1.17 selects the passive navigation layout by the exact running executable hash. Russian navigation `1b2751ef…` uses singleton slot `0x4687a4`, object `0x47e440`, vtable `0x45f544`, and pose block `+0x112c`; Zigma/Puron retain `+0x1120`. Scan and map geometry offsets remain `+4` and `+0xe44`. The Russian layout is statically traced and covered by synthetic regression fixtures; runtime validation on that navigation build is pending. The subsequent Issue04 installer update enables this exact original pair with its RTL8723DS module and reviewed scripts, alongside the Ciccia hybrid. Zones V1.6 allows its reviewed type16/type17 configuration query. Physical validation of the original robot remains pending.
+
+
+### RoboJet Issue08: reduced navigation and map position fallback
+
+For the current feature inventory, see [RoboJet Issue08 support and limitations](../hack/ROBOJET_ISSUE08_SUPPORT.md).
+
+Observer V1.18 recognizes navigation SHA-256
+`f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c`
+as `robojet-issue08-map-only`. Its passive pose and LiDAR readers are disabled:
+no `/proc/PID/mem` is opened by these readers for this profile. The profile has
+no borrowed addresses. Existing Zigma, Puron and Issue04 RAM readers remain.
+
+`zigmactl status --json` (V1.13) and the web coordinates/marker select a valid
+navigation cache first, then a reported map position, a recent path estimate
+(up to six seconds), or the last recorded path point. Both upstream sources
+remain independent. A map point has no inferred heading or resolution;
+`position.source`, `quality`, `age_s` and nullable `heading` describe the result.
+`available: true` means a usable coordinate, not a current physical fix.
+`fresh` remains false and the measurement timestamp remains unknown. Recorded
+points can remain available while stationary or after updates stop, explicitly
+labelled recorded; missing or invalid points return unavailable. Map identity,
+geometry, bounds, reset and relocation checks prevent unrelated overlays.
+
+Map fallback is for display/status only. Blocking `goto` refuses to dispatch
+when the observer explicitly reports no navigation RAM support; recorded path
+points are never substituted for arrival confirmation. Nonblocking command
+semantics are unchanged.
+
+The initial V1.18 change provided reduced **navigation** support only.
+Subsequent app, map and installation support is described below; the linked
+feature inventory records the current implementation. V1.13 avoids reusing the
+V1.10–V1.12 identifiers reserved by the separate manual-drive branch.
+
+Offline checks: `make -C src/robot test-navigation-profiles test-navigation`,
+`python3 -m unittest installer.tests.test_ctl_status`, and
+`node installer/tests/test_position_selection.js`.
+
+
+### RoboJet Issue08 app cache adapter
+
+Observer V1.19 recognizes app-server SHA-256
+`8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c`.
+It reads exactly 92 bytes at 0x4395c, guarded by initialization at 0x43e08,
+and volume at 0x43a7e. State, battery, error, continue-clean and obstacle
+crossing use the statically verified offsets. Both reads must agree; receipt
+is not physical freshness. Observer V1.22 enables area/time using the existing
+JSON contract: `clean_area_m2 = vendor_clean_area_raw` and
+`clean_time_s = vendor_clean_time_raw * 60`. Zero is a valid available value.
+The binary publishes status offsets +0x24 and +0x28 unchanged as `CleanArea`
+and `CleanTime`, respectively. This establishes field correspondence, not
+independent proof of physical units. The RAM adapter reports
+`statistics_units_source=robojet_json_contract_provisional`; raw counters remain available for validation.
+The web UI displays area in m² (or ft² by preference) and time in minutes.
+Independent core JSON telemetry retains its existing conversion.
+
+The zone adapter snapshots both counted arrays: virtual walls
+at pointer slot 0x43e24 with 16-byte records, and forbidden polygons at 0x43e28
+with 32-byte records. Both entire snapshots and pointers must agree; malformed
+counts, invalid coordinates, missing pointers and incomplete reads publish no
+partial geometry. A zero count is an empty array; a null pointer is unavailable.
+The output uses `kind: virtual_wall` (two points) or `forbidden_polygon`
+(four points). Walls retain `read_only: true` and null restriction classes.
+With observer V1.20, forbidden polygons expose both cleaning flags as false:
+this legacy format has one exclusion type, not separate vacuum/mop classes.
+Agent V1.30 and zones V1.7 support editing these polygons while preserving walls.
+
+This integrates with the existing map-position fallback and map-only navigation
+profile. RoboJet app-cache readings, map output and polygon configuration
+readback are checked on Ciccia. Supported writes are limited to the reviewed
+command adapters; the map decoder does not enable native map import. Existing firmware profiles and manual-drive branch are unchanged.
+
+Validation: `make -C src/robot test-robojet test-app-profiles test-puron-settings
+test-puron-zones test-map-formats test-navigation-profiles test-zone-commands`,
+plus the production JS selector/wall-render tests. Fixtures are synthetic;
+original firmware and disassembly remain private.
+
+
+### RC15 installation trial
+
+The source-only installer/service restrictions described above are superseded
+by RC15 for the exact Ciccia kernel23 + RoboJet Issue08 component profile.
+Full is enabled for the owner's installation trial, retaining the reduced
+navigation limitations and the initial read-only geometry adapter. Subsequent
+geometry editing and map support are documented in the current feature inventory. Physical compatibility is not
+claimed by this opt-in release; see installer/BUILD.md.
+
+### Saved-map decoder V1.13
+
+`zigma-maps-arm` reads the RoboJet `relo` version 2 framing as well as the
+existing version 6/7 `GRID` format. Version 2 uses length-prefixed zone config,
+16-byte metadata, a Grid2D protobuf and relocation data. Its packed (or unpacked)
+cell field contains two consecutive matrices: correspondence costs and auxiliary
+bytes. The decoder validates the full-file checksum, section bounds, geometry,
+varints, cell counts and value ranges before exposing a preview. Unknown fields
+with supported protobuf wire types are skipped; TSDF and other framing variants
+remain unsupported. Full-grid coordinates and the existing preview orientation
+are retained.
+
+Master copies preserve the original bytes and can be previewed. Maps V1.17 and
+agent V1.35 enable native v2 restoration for the exact RoboJet pair, with current-ID
+and idle checks, backups, checksum validation and native/map-publication
+confirmation. A same-map restore with three no-go polygons was verified on Ciccia;
+a cross-ID import also succeeded. The converted map retained its file and ID
+after reboot but did not republish its live grid, so full reload remains unvalidated. See
+[native import and validation](../hack/ROBOJET_MAP_IMPORT.md). No native IPC is
+sent by catalog or preview operations. Synthetic regression tests: `make -C src/robot test-map-formats
+test-map-native`. No private maps are included in the repository.
+
+### RoboJet geometry controls (agent V1.30, observer V1.20)
+
+Area V1.2 uses the reviewed `PlanningRect` JSON protocol and checks the native
+receiver image; RoboJet also requires its exact navigation image. Zones V1.7
+converts full polygon snapshots into the legacy flat `forbidden_zone_x/y` arrays.
+The native app performs Y inversion, sends 32-byte quads and requests a one-shot
+configuration readback. The helper never sends classified 36-byte records to
+RoboJet and refuses vacuum-only or mop-only restrictions. Wall keys are omitted
+to preserve existing virtual walls; their edit/delete controls remain disabled.
+
+Both tools work on the live map and on Detailed view when its saved map identity
+and coordinate transform agree with the current map. Drawing uses live grid
+coordinates, including when the detailed preview is downsampled. Frame changes,
+reset and relocation block editing. RoboJet's idle Hibernating state is accepted
+with confirmed local communication and no error. Other profiles retain their
+existing state guards. Area dispatch can start motion; it is only sent after the
+user chooses Clean this area. Zone changes retain backups, base-snapshot checks
+and feedback confirmation. Up to twelve forbidden polygons are supported.
+
+Installed on Ciccia with API/capability/frame checks and unchanged saved map.
+No physical cleaning or zone changes were performed during deployment. Tests:
+`make -C src/robot test-robojet test-zone-commands test-navigation test-map-formats`,
+`node installer/tests/test_geometry_controls.js` and
+`node installer/tests/test_position_selection.js`. RC15 release archives are unchanged.
+
+RoboJet startup follow-up: zones V1.8 and service V1.10 request configuration
+once per native process identity, including after cold boot. Observer V1.21
+distinguishes unavailable zones from a confirmed empty list when deciding
+whether to publish the cache. Null native pointers still mean unavailable;
+they are never silently treated as an empty zone set.

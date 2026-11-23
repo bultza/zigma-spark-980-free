@@ -55,7 +55,7 @@ static cJSON *save_copy(int lib,cJSON *request,const char **error){
  int dir=open(source,O_RDONLY|O_DIRECTORY|O_NOFOLLOW);if(dir<0){*error="Source maps unavailable";return NULL;}struct stat a,b;if(fstat(dir,&a)||fstat(lib,&b)||(a.st_dev==b.st_dev&&a.st_ino==b.st_ino)){close(dir);*error="Library must be separate from robot maps";return NULL;}
  struct map m;bool ok=read_map(dir,id,&m);close(dir);if(!ok){*error="Saved map cannot be read consistently";return NULL;}
  if(strcmp(m.revision,rev)){free(m.data);*error="The robot map changed; refresh before saving";return NULL;}
- uint32_t aux=u32(m.data+m.grid+84);if(aux){size_t cells=(size_t)m.w*m.h;unsigned char *raw=malloc(cells);bool valid=raw&&lz4(m.data+m.grid+GRID_HEADER+m.packed,aux,raw,cells);free(raw);if(!valid){free(m.data);*error="Saved map auxiliary data is invalid";return NULL;}}
+ uint32_t aux=m.protobuf?0:u32(m.data+m.grid+84);if(aux){size_t cells=(size_t)m.w*m.h;unsigned char *raw=malloc(cells);bool valid=raw&&lz4(m.data+m.grid+GRID_HEADER+m.packed,aux,raw,cells);free(raw);if(!valid){free(m.data);*error="Saved map auxiliary data is invalid";return NULL;}}
  cJSON *decoded=preview(&m);if(!decoded){free(m.data);*error="Saved map failed decoding; no master was saved";return NULL;}cJSON_Delete(decoded);
  char existing_file[48];lib_path(existing_file,uid,"map");struct stat existing_st;bool exists=!fstatat(lib,existing_file,&existing_st,AT_SYMLINK_NOFOLLOW);
  unsigned count;size_t used;struct statvfs space;
@@ -106,7 +106,7 @@ static int library_command(const char *folder,const char *op,const char *json){
 static int native_delete_command(const char *pid,const char *json,bool dry,bool clear){
  const char *end;cJSON *r=cJSON_ParseWithOpts(json,&end,1);uint32_t target,active;bool valid=cJSON_IsObject(r)&&(!item(r,"backup")||cJSON_IsBool(item(r,"backup")))&&map_id(string(r,"id"),&target)&&target>0&&map_id(string(r,"active_id"),&active)&&(clear?active==target:active!=target)&&cJSON_IsTrue(item(r,"confirm"))&&(!clear||!strcmp(string(r,"confirmation_text"),"CLEAR"));
  if(!valid){cJSON_Delete(r);return lib_error("Invalid map identity or missing explicit confirmation");}
- if(!dry&&clear&&!native_clear_supported(pid)){cJSON_Delete(r);return lib_error("Native clear is not validated for this firmware");}
+ if(!dry&&!native_clear_supported(pid)){cJSON_Delete(r);return lib_error("Native map deletion/reset is not validated for this firmware");}
  if(!dry){uint32_t now;if(!native_identity(pid,&now)||now!=active){cJSON_Delete(r);return lib_error("Active map changed; no deletion sent");}
   int dir=open(string(r,"source_dir"),O_RDONLY|O_DIRECTORY|O_NOFOLLOW);struct map m;bool same=dir>=0&&read_map(dir,target,&m);if(dir>=0)close(dir);if(same){same=!strcmp(m.revision,string(r,"revision"));free(m.data);}if(!same){cJSON_Delete(r);return lib_error("Map changed; no deletion sent");}
   /* Backup is required unless explicitly disabled by this confirmed request. */

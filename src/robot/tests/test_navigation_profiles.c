@@ -9,6 +9,7 @@ int main(void){
  for(size_t j=0;j<sizeof navigation_profiles/sizeof *navigation_profiles;j++){
   assert(!ftruncate(fd,0));const struct navigation_profile *p=&navigation_profiles[j];
   assert(navigation_profile_hash(p->sha256)==p);
+  if(!p->slot){float scan[360];assert(!navigation_profile_fd(fd,p));assert(!laser_copy(fd,scan,p));assert(!cached_navigation_pose(fd,NULL,p));continue;}
   write_at(fd,p->slot,&p->base,4);write_at(fd,p->base,&p->vtable,4);
   float values[360],got[360];for(int i=0;i<360;i++)values[i]=(float)i/100;
   write_at(fd,p->base+4,values,sizeof values);assert(navigation_profile_fd(fd,p)==p);assert(laser_copy(fd,got,p)&&!memcmp(values,got,sizeof values));

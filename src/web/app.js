@@ -187,7 +187,7 @@ function renderStatus() {
  $('primary-command').disabled=app.busy || !app.connected || !s.capabilities.basic_control || (s.fresh&&cleaning) || (s.fresh&&['returning','BackCharging'].includes(s.working_status));
  $('pause-command').disabled=app.busy || !app.connected || !s.capabilities.basic_control || (s.fresh&&!(cleaning || ['returning','BackCharging'].includes(s.working_status)));
  $('dock-command').disabled=app.busy || !app.connected || !s.capabilities.basic_control || (s.fresh&&docked);
- document.querySelector('[data-tool="area"]').disabled=displayedMap().geometry||!app.map?.available||app.busy||Boolean(app.activeArea?.locked)||!app.connected||!s.capabilities.area_clean||!['charging','PileCharging','DirCharging','Standby','idle','Pause','paused'].includes(s.working_status);
+ document.querySelector('[data-tool="area"]').disabled=!editableMapFrame()||!app.map?.available||app.busy||Boolean(app.activeArea?.locked)||!app.connected||!s.capabilities.area_clean||!geometryIdle(s,true);
  const zoneButton=document.querySelector('[data-tool="zone"]');zoneButton.disabled=!zoneEditingReady();zoneButton.title=zoneEditingReady()?'Create a no-go zone':!app.connected?'Connect to the robot first':!s.capabilities.map_edit?'Reload the page to load the zone editor':!(s.fresh||(s.cache_available&&s.local_link_active))?'Waiting for recent robot status and local communication':app.activeArea?.locked?'Waiting for area cleaning to finish':app.pendingZones?'Waiting for the robot to confirm the previous zone update':'Zone editing requires an idle robot with no error';
 }
 function sTime(){return app.status?.server_time || Math.floor(Date.now()/1000);}
@@ -323,6 +323,9 @@ $('schedule-form').addEventListener('submit',async event=>{event.preventDefault(
 function mapDisplay(map,status,mode='map',now=Date.now()/1000) {if(map?.reset_pending||status?.map_reset_pending)return {map:null,geometry:false};const g=status?.map_geometry;const age=now-g?.cache_read_at;const valid=g?.available&&age>=0&&age<=15&&Number.isInteger(g.width)&&Number.isInteger(g.height)&&g.width>0&&g.height>0;const raster=map?.available&&Array.isArray(map.cells)&&map.cells.length===map.width*map.height;const relocating=status?.working_status==='Relocation';const changed=valid&&g.map_id&&map?.map_id&&g.map_id!==map.map_id;if(relocating||changed)return {map:valid?g:null,geometry:true};if(mode==='geometry')return {map:valid?g:raster?map:null,geometry:true};return raster?{map,geometry:false}:{map:valid?g:null,geometry:true};}
 function detailedDisplay(detail,map,status) {const blocked=map?.reset_pending||status?.map_reset_pending;const mismatch=map?.map_id&&detail?.map_id!==String(map.map_id);return {map:!blocked&&!mismatch?detail:null,geometry:true,detailed:true};}
 function detailedOverlayGeometry(detail,map,status,g) {if(!detail?.available||!map?.available||status?.working_status==='Relocation'||status?.map_reset_pending||map.reset_pending||String(map.map_id)!==detail.map_id||!Array.isArray(detail.grid_origin)||detail.grid_origin.length!==2||!Array.isArray(map.map_origin)||map.map_origin.length!==2||![...detail.grid_origin,...map.map_origin].every(Number.isFinite)||!Number.isInteger(detail.preview_step)||detail.preview_step<1||!Number.isFinite(detail.resolution_m)||Math.abs(detail.resolution_m-.05)>1e-7)return null;const scale=g.scale/detail.preview_step;return {...g,scale,left:g.left+(detail.grid_origin[0]-map.map_origin[0])*scale,top:g.top+(detail.grid_origin[1]-map.map_origin[1])*scale};}
+function editableMapFrame() {const d=displayedMap();return !d.geometry||Boolean(d.detailed&&detailedOverlayGeometry(d.map,app.map,app.status,{scale:1,left:0,top:0}));}
+function geometryIdle(status,area=false) {return Boolean((area?['charging','PileCharging','DirCharging','Standby','idle','Pause','paused']:['charging','PileCharging','DirCharging','Standby','idle']).includes(status?.working_status)||(status?.app_server_profile==='robojet-issue08'&&status?.working_status==='Hibernating'));}
+function toEditGrid(event) {const d=displayedMap(),g=d.detailed?detailedOverlayGeometry(d.map,app.map,app.status,geometry()):geometry();return g?{x:(event.clientX-g.rect.left-g.left)/g.scale,y:(event.clientY-g.rect.top-g.top)/g.scale}:null;}
 function displayedMap() {if(app.mapView==='laser')return {geometry:true,map:{available:true,width:10,height:10,zones:[]}};return app.mapView==='detailed'?detailedDisplay(app.detailMap,app.map,app.status):mapDisplay(app.map,app.status,app.mapView);}
 async function loadDetailedMap() {
  if(app.detailBusy||app.mapView!=='detailed'||app.page!=='control'||document.hidden)return;
@@ -344,15 +347,26 @@ function geometry() {const map=displayedMap().map;if(!map?.available)return null
 function toScreen(point,g) {return {x:g.left+point.x*g.scale,y:g.top+point.y*g.scale};}
 function toGrid(event) {const g=geometry();return g?{x:(event.clientX-g.rect.left-g.left)/g.scale,y:(event.clientY-g.rect.top-g.top)/g.scale}:null;}
 function navigationPose(map,status,now=Date.now()/1000) {const p=status?.navigation_pose;if(!p||p.kind!=='navigation_pose_cache'||p.frame!=='map_grid'||p.map_id!==map?.map_id||p.width!==map.width||p.height!==map.height||!Array.isArray(p.map_origin)||!Array.isArray(map.map_origin)||p.map_origin.length!==2||map.map_origin.length!==2||p.map_origin.some((v,i)=>!Number.isFinite(v)||v!==map.map_origin[i])||![p.x,p.y,p.heading,p.cache_read_at,now].every(Number.isFinite)||p.x<0||p.y<0||p.x>=map.width||p.y>=map.height||now-p.cache_read_at<0||now-p.cache_read_at>15)return null;return p;}
+function selectedRobotPosition(map,status,now=Date.now()/1000){
+ if(map?.reset_pending||status?.map_reset_pending||status?.working_status==='Relocation')return null;
+ const nav=navigationPose(map,status,now);
+ if(nav&&Number.isFinite(nav.resolution_m)&&nav.resolution_m>=0.001&&nav.resolution_m<=1&&Math.abs(nav.heading)<=Math.PI)return {...nav,source:'navigation_memory',quality:'cached'};
+ if(!map?.available||!map.map_id||!Number.isInteger(map.width)||!Number.isInteger(map.height)||map.width<=0||map.height<=0||map.width>2048||map.height>2048||!Array.isArray(map.map_origin)||map.map_origin.length!==2||!map.map_origin.every(Number.isFinite))return null;
+ const valid=p=>p&&[p.x,p.y].every(Number.isFinite)&&p.x>=0&&p.y>=0&&p.x<map.width&&p.y<map.height;
+ let p=null,quality='',source='map_path';
+ if(valid(map.position)){p=map.position;quality='reported';source='map_position';}
+ else if(valid(map.position_estimate)&&map.position_estimate.kind==='recent_path_estimate'&&Number.isFinite(map.position_estimate.received_at)&&map.position_estimate.received_at>0&&now>=map.position_estimate.received_at&&now-map.position_estimate.received_at<=6){p=map.position_estimate;quality='estimated';}
+ else if(valid(map.path_endpoint)&&map.path_endpoint.kind==='recorded_path_endpoint'){p=map.path_endpoint;quality='recorded';}
+ return p?{x:p.x,y:p.y,heading:null,map_id:map.map_id,width:map.width,height:map.height,map_origin:map.map_origin,source,quality}:null;
+}
 function robotPoseText(pose){
- if(!pose||!Array.isArray(pose.map_origin)||pose.map_origin.length!==2||![pose.x,pose.y,pose.heading,...pose.map_origin].every(Number.isFinite))return 'Robot · position unavailable';
- const heading=((pose.heading*180/Math.PI+90)%360+360)%360;
- return `Robot X: ${(pose.x-pose.map_origin[0]).toFixed(1)}  Y: ${(pose.y-pose.map_origin[1]).toFixed(1)} · Heading: ${(Math.round(heading*10)/10%360).toFixed(1)}° · cached`;
+ if(!pose||!Array.isArray(pose.map_origin)||pose.map_origin.length!==2||![pose.x,pose.y,...pose.map_origin].every(Number.isFinite))return 'Robot · position unavailable';
+ const degrees=((pose.heading*180/Math.PI+90)%360+360)%360;
+ const heading=Number.isFinite(pose.heading)?`Heading: ${(Math.round(degrees*10)/10%360).toFixed(1)}°`:'Heading unavailable';
+ return `Robot X: ${(pose.x-pose.map_origin[0]).toFixed(1)}  Y: ${(pose.y-pose.map_origin[1]).toFixed(1)} · ${heading} · ${pose.quality||'cached'}`;
 }
 function renderRobotPose(){
- const blocked=app.map?.reset_pending||app.status?.map_reset_pending||app.status?.working_status==='Relocation';
- const pose=blocked?null:navigationPose(app.map,app.status);
- $('robot-coordinates').textContent=robotPoseText(pose);
+ $('robot-coordinates').textContent=robotPoseText(selectedRobotPosition(app.map,app.status));
 }
 function drawMap() {
  renderRobotPose();
@@ -360,30 +374,30 @@ function drawMap() {
  const canvas=$('map'),bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;const ratio=Math.min(devicePixelRatio || 1,2);canvas.width=Math.round(bounds.width*ratio);canvas.height=Math.round(bounds.height*ratio);const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);ctx.clearRect(0,0,bounds.width,bounds.height);
  document.querySelector('.map-panel').classList.toggle('detailed-view',app.mapView==='detailed');document.querySelector('.map-panel').classList.toggle('laser-view',app.mapView==='laser');$('laser-rotate').classList.toggle('hidden',app.mapView!=='laser');$('laser-overlay').classList.toggle('hidden',app.mapView!=='laser');document.querySelector('.map-panel h2').textContent=app.mapView==='laser'?'Live LIDAR':'Your map';if(app.mapView==='laser'){drawLaser(ctx,bounds);return;}
  const display=displayedMap();let map=display.map;const geometryOnly=display.geometry;document.querySelector('.map-panel').classList.toggle('detailed-view',Boolean(display.detailed));$('map-empty').classList.toggle('hidden',Boolean(map?.available));if(!map?.available){$('map-empty').textContent=app.map?.reset_pending?app.map.warning:app.mapView==='detailed'?(app.detailError||'Saved occupancy is not available yet.'):app.mapView==='geometry'?'Usable path data is not available yet.':'The map is not available yet.';$('map-description').textContent=app.map?.reset_pending?'Waiting for a new robot map':'Map unavailable';$('position-legend').textContent='Position unavailable';$('map-source').textContent='UNAVAILABLE';$('map-freshness').textContent=app.map?.reset_pending?'Old map hidden during map change':'';return;}
- let g=geometry();if(display.detailed){ctx.imageSmoothingEnabled=false;ctx.drawImage(map.raster,g.left,g.top,map.width*g.scale,map.height*g.scale);$('map-description').textContent='Detailed occupancy · saved map · read only';$('map-source').textContent='SAVED GRID';$('map-freshness').textContent='Saved occupancy · overlays unavailable for this frame';$('position-legend').textContent='Position unavailable';const overlay=detailedOverlayGeometry(map,app.map,app.status,g);if(!overlay)return;g=overlay;map=app.map;ctx.save();const frame=geometry();ctx.beginPath();ctx.rect(frame.left,frame.top,display.map.width*frame.scale,display.map.height*frame.scale);ctx.clip();}
+ let g=geometry();if(display.detailed){ctx.imageSmoothingEnabled=false;ctx.drawImage(map.raster,g.left,g.top,map.width*g.scale,map.height*g.scale);$('map-description').textContent=editableMapFrame()?'Detailed occupancy · editing in the current map frame':'Detailed occupancy · saved map · read only';$('map-source').textContent='SAVED GRID';$('map-freshness').textContent='Saved occupancy · overlays unavailable for this frame';$('position-legend').textContent='Position unavailable';const overlay=detailedOverlayGeometry(map,app.map,app.status,g);if(!overlay)return;g=overlay;map=app.map;ctx.save();const frame=geometry();ctx.beginPath();ctx.rect(frame.left,frame.top,display.map.width*frame.scale,display.map.height*frame.scale);ctx.clip();}
  if(!geometryOnly){
  if(app.gridCache?.cells!==map.cells){const raster=document.createElement('canvas');raster.width=map.width;raster.height=map.height;const paint=raster.getContext('2d'),palette=['#fafaf5','#b8c3af','#d9bd8b',null];for(let y=0;y<map.height;y++)for(let x=0;x<map.width;x++){const color=palette[map.cells[y*map.width+x]];if(color){paint.fillStyle=color;paint.fillRect(x,y,1,1);}}app.gridCache={cells:map.cells,raster};}
  ctx.imageSmoothingEnabled=false;ctx.drawImage(app.gridCache.raster,g.left,g.top,map.width*g.scale,map.height*g.scale);
  } else if(!display.detailed){ctx.strokeStyle="#b8c3af";ctx.setLineDash([4,4]);ctx.strokeRect(g.left,g.top,map.width*g.scale,map.height*g.scale);ctx.setLineDash([]);}
  if(map.path?.length){ctx.beginPath();map.path.forEach((p,i)=>{const q=toScreen(p,g);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.strokeStyle='#b4a181';ctx.lineWidth=1.7;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);}
  for(const zone of visibleMapZones(map))drawZone(ctx,zone,g);
- if(!geometryOnly&&app.activeArea?.locked&&JSON.stringify(app.activeArea.context)===JSON.stringify(mapContext(map)))drawRect(ctx,app.activeArea.rect,g,'#398bdf',true);
- if(!geometryOnly&&app.selection)drawRect(ctx,app.selection,g,app.tool==='area'?'#398bdf':'#e89435',false);
+ if(editableMapFrame()&&app.activeArea?.locked&&JSON.stringify(app.activeArea.context)===JSON.stringify(mapContext(map)))drawRect(ctx,app.activeArea.rect,g,'#398bdf',true);
+ if(editableMapFrame()&&app.selection)drawRect(ctx,app.selection,g,app.tool==='area'?'#398bdf':'#e89435',false);
  if(map.dock){const p=toScreen(map.dock,g);ctx.fillStyle='#819572';ctx.beginPath();ctx.roundRect(p.x-6,p.y-4,12,9,2);ctx.fill();ctx.strokeStyle='#f7f8f2';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(p.x-3,p.y);ctx.lineTo(p.x+3,p.y);ctx.stroke();}
- const candidate=map.position_estimate;const age=Date.now()/1000-(candidate?.received_at || 0);const estimate=(!geometryOnly||display.detailed)&&age>=0&&age<=6?candidate:null;const nav=geometryOnly&&!display.detailed?null:navigationPose(map,app.status);const marker=nav || map.position || estimate || map.path_endpoint;
- if(marker){const p=toScreen(marker,g);ctx.fillStyle=nav?'#487b98':map.position||estimate?'#436b53':'#b4a181';ctx.shadowBlur=10;ctx.shadowColor='#456a4433';ctx.beginPath();ctx.arc(p.x,p.y,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.strokeStyle='#456a4425';ctx.lineWidth=2;ctx.stroke();}
+ const marker=selectedRobotPosition(map,geometryOnly&&!display.detailed?{...app.status,navigation_pose:null}:app.status);const nav=marker?.source==='navigation_memory'?marker:null;const estimate=marker?.quality==='estimated';
+ if(marker){const p=toScreen(marker,g);ctx.fillStyle=nav?'#487b98':marker&&marker.quality!=='recorded'?'#436b53':'#b4a181';ctx.shadowBlur=10;ctx.shadowColor='#456a4433';ctx.beginPath();ctx.arc(p.x,p.y,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.strokeStyle='#456a4425';ctx.lineWidth=2;ctx.stroke();}
  if(nav){const p=toScreen(nav,g);ctx.strokeStyle='#487b98';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+18*Math.cos(nav.heading),p.y+18*Math.sin(nav.heading));ctx.stroke();}
- document.querySelector('.legend-robot').style.background=nav?'#487b98':map.position||estimate?'#436b53':'#b4a181';
- $('position-legend').textContent=nav?'Navigation position · cached':map.position?'Reported position':estimate?'Position estimate · updating':map.path_endpoint?'Last recorded point · not live':'Position unavailable';
+ document.querySelector('.legend-robot').style.background=nav?'#487b98':marker&&marker.quality!=='recorded'?'#436b53':'#b4a181';
+ $('position-legend').textContent=nav?'Navigation position · cached':marker?.quality==='reported'?'Reported position':estimate?'Position estimate · updating':marker?'Last recorded point · not live':'Position unavailable';
  $('map-description').textContent=map.source==='synthetic'?'An example home, without private data':'Map received from the agent';$('map-source').textContent=map.source==='synthetic'?'SIMULATED':'LOCAL MAP';$('map-freshness').textContent=map.source==='synthetic'?'Simulated data':(nav?'Navigation pose and heading from cache · physical sampling time unknown':(map.warning || 'Last received path · freshness unknown'));
- if(geometryOnly){$('map-description').textContent=app.status?.working_status==='Relocation'?'Relocating · path view':app.mapView==='geometry'?'Path · read only':'Current map unavailable · showing path';$('map-source').textContent=map.source==='local_core_geometry'?'RECEIVED PATH':'CACHED PATH';$('map-freshness').textContent=map.frame==='native_geometry_bounds'?'Native zone geometry · units and measurement time unknown · border is view extent':'Path and available zones · measurement time unknown · border is map extent';}
- if(display.detailed){ctx.restore();$('map-description').textContent='Detailed occupancy · saved map · read only';$('map-source').textContent='SAVED GRID + OVERLAYS';$('map-freshness').textContent='Saved occupancy · cached overlays · alignment preview';}
+ if(geometryOnly&&!display.detailed){$('map-description').textContent=app.status?.working_status==='Relocation'?'Relocating · path view':app.mapView==='geometry'?'Path · read only':'Current map unavailable · showing path';$('map-source').textContent=map.source==='local_core_geometry'?'RECEIVED PATH':'CACHED PATH';$('map-freshness').textContent=map.frame==='native_geometry_bounds'?'Native zone geometry · units and measurement time unknown · border is view extent':'Path and available zones · measurement time unknown · border is map extent';}
+ if(display.detailed){ctx.restore();$('map-description').textContent=editableMapFrame()?'Detailed occupancy · editing in the current map frame':'Detailed occupancy · saved map · read only';$('map-source').textContent='SAVED GRID + OVERLAYS';$('map-freshness').textContent='Saved occupancy · cached overlays · alignment preview';}
 
 }
-function drawZone(ctx,zone,g){if(!Array.isArray(zone.points)){drawRect(ctx,zone,g,'#c47e6c',true);return;}if(zone.points.length!==4)return;const color=zone.can_clean?'#c79a51':'#ba6d5d';ctx.beginPath();zone.points.forEach((p,i)=>{const q=toScreen(p,g);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.closePath();ctx.fillStyle=`${color}33`;ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.fill();ctx.stroke();}
+function drawZone(ctx,zone,g){if(zone.kind==='virtual_wall'&&zone.points?.length===2){const a=toScreen(zone.points[0],g),b=toScreen(zone.points[1],g);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle='#ba6d5d';ctx.lineWidth=2.5;ctx.stroke();return;}if(!Array.isArray(zone.points)){drawRect(ctx,zone,g,'#c47e6c',true);return;}if(zone.points.length!==4)return;const color=zone.can_clean?'#c79a51':'#ba6d5d';ctx.beginPath();zone.points.forEach((p,i)=>{const q=toScreen(p,g);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);});ctx.closePath();ctx.fillStyle=`${color}33`;ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.fill();ctx.stroke();}
 function drawRect(ctx,r,g,color,saved) {const a=toScreen({x:r.x,y:r.y},g);ctx.fillStyle=`${color}1c`;ctx.fillRect(a.x,a.y,r.width*g.scale,r.height*g.scale);ctx.strokeStyle=color;ctx.lineWidth=1.4;ctx.setLineDash(saved?[]:[5,3]);ctx.strokeRect(a.x,a.y,r.width*g.scale,r.height*g.scale);ctx.setLineDash([]);}
 function setTool(tool) {
- if(tool!=='pan'&&displayedMap().geometry)return;
+ if(tool!=='pan'&&!editableMapFrame())return;
  if(tool==='area'&&(app.busy||app.activeArea?.locked))return;
  if(tool==='zone'&&!zoneEditingReady())return;
  app.editingZone=null;app.zoneBase=tool==='zone'?structuredClone(app.map.zones||[]):null;if(tool==='zone')$('zone-restriction').value='all';
@@ -391,25 +405,25 @@ function setTool(tool) {
  app.selectionContext=null;drawMap();
 }
 function saveArea() {try {sessionStorage.setItem('zigma-area',JSON.stringify(app.activeArea));}catch{}}
-function nextAreaState(area,s) {if(!area?.locked)return null;const recent=(s.fresh&&s.observed_at>=area.at)||(s.cache_available&&s.local_link_active&&s.cache_read_at>=area.at);if(!recent)return area;const work=s.working_status;if(['PlanningRect','Relocation','AutoClean','cleaning'].includes(work)&&!area.started)return {...area,started:true};if(['charging','PileCharging','DirCharging','Standby','idle'].includes(work)&&(area.started||s.server_time-area.at>30))return null;return area;}
+function nextAreaState(area,s) {if(!area?.locked)return null;const recent=(s.fresh&&s.observed_at>=area.at)||(s.cache_available&&s.local_link_active&&s.cache_read_at>=area.at);if(!recent)return area;const work=s.working_status;if(['PlanningRect','Relocation','AutoClean','cleaning'].includes(work)&&!area.started)return {...area,started:true};if(geometryIdle(s)&&(area.started||s.server_time-area.at>30))return null;return area;}
 function mapContext(map) {return {map_id:map?.map_id,width:map?.width,height:map?.height,map_origin:map?.map_origin?.slice()};}
 function renderSelection() {
- $('zone-restriction-field').classList.toggle('hidden',app.tool!=='zone');
+ const unclassified=app.status?.capabilities.zone_restriction_classes===false;if(unclassified)$('zone-restriction').value='all';$('zone-restriction-field').classList.toggle('hidden',app.tool!=='zone'||unclassified);
  $('selection-panel').classList.toggle('hidden',!app.selection);if(!app.selection)return;const r=app.selection;
  $('map-instruction').textContent=`Drag inside the ${app.tool==='area'?'blue':'orange'} rectangle to move it · Drag outside to draw again`;
  $('selection-title').textContent=app.tool==='zone'?(app.editingZone===null?'New no-go zone':`Edit zone ${app.editingZone+1}`):'Selected area';$('selection-size').textContent=`${r.width} × ${r.height} map cells`;
  for(const key of ['x','y','width','height'])$(`rect-${key}`).value=String(Math.round(r[key]));
- $('apply-selection').textContent=app.tool==='zone'?'Save zone':'Clean this area';$('apply-selection').disabled=app.busy||!app.connected||(app.tool==='zone'&&!zoneEditingReady())||r.width<2||r.height<2||(app.tool==='area'&&(app.activeArea?.locked||!app.status?.capabilities.area_clean||!['charging','PileCharging','DirCharging','Standby','idle','Pause','paused'].includes(app.status?.working_status)));
+ $('apply-selection').textContent=app.tool==='zone'?'Save zone':'Clean this area';$('apply-selection').disabled=app.busy||!app.connected||(app.tool==='zone'&&!zoneEditingReady())||r.width<2||r.height<2||(app.tool==='area'&&(app.activeArea?.locked||!app.status?.capabilities.area_clean||!geometryIdle(app.status,true)));
 }
-function zoneEditingReady() {const s=app.status;return Boolean(!displayedMap().geometry&&app.connected&&!app.busy&&!app.pendingZones&&!app.activeArea?.locked&&s?.capabilities.map_edit&&(s.mode==='demo'||app.map?.zones_available)&&(s.fresh||(s.cache_available&&s.local_link_active))&&s.error==='NoError'&&['charging','PileCharging','DirCharging','Standby','idle'].includes(s.working_status));}
+function zoneEditingReady() {const s=app.status;return Boolean(!app.map?.zones_read_only&&editableMapFrame()&&app.connected&&!app.busy&&!app.pendingZones&&!app.activeArea?.locked&&s?.capabilities.map_edit&&(s.mode==='demo'||app.map?.zones_available)&&(s.fresh||(s.cache_available&&s.local_link_active))&&s.error==='NoError'&&geometryIdle(s));}
 function zoneSignature(zones) {return JSON.stringify((zones||[]).map(z=>{const points=z.points||rectangleZone(z,{}).points,xy=points.map(p=>[snapGridCell(p.x),snapGridCell(p.y)]),variants=[];for(const order of [xy,[...xy].reverse()])for(let i=0;i<order.length;i++)variants.push(JSON.stringify([...order.slice(i),...order.slice(0,i)]));return {polygon:variants.sort()[0],can_clean:z.can_clean,can_mop:z.can_mop};}));}
 function rectangleZone(rect,flags) {return {points:[{x:rect.x,y:rect.y},{x:rect.x,y:rect.y+rect.height},{x:rect.x+rect.width,y:rect.y+rect.height},{x:rect.x+rect.width,y:rect.y}],...flags};}
 function snapGridCell(value) {return Number.isFinite(value)&&Math.abs(value-Math.round(value))<=0.00001?Math.round(value):value;}
 function zoneRectangle(z) {const p=z.points?.map(v=>({x:snapGridCell(v.x),y:snapGridCell(v.y)}));if(!p)return {x:z.x,y:z.y,width:z.width,height:z.height};if(p.length!==4||p.some(v=>!Number.isInteger(v.x)||!Number.isInteger(v.y))||new Set(p.map(v=>v.x)).size!==2||new Set(p.map(v=>v.y)).size!==2||new Set(p.map(v=>`${v.x},${v.y}`)).size!==4)return null;const x=Math.min(...p.map(v=>v.x)),y=Math.min(...p.map(v=>v.y));return {x,y,width:Math.max(...p.map(v=>v.x))-x,height:Math.max(...p.map(v=>v.y))-y};}
-function editZone(index) {if(!zoneEditingReady())return;const z=app.map.zones[index],r=zoneRectangle(z);if(!r){toast('This polygon can be preserved or deleted; rectangle editing is unavailable.');return;}setTool('zone');app.editingZone=index;app.selection=r;app.selectionContext=mapContext(app.map);$('zone-restriction').value=z.can_clean?'mop':z.can_mop?'vacuum':'all';renderSelection();drawMap();}
+function editZone(index) {if(!zoneEditingReady())return;const z=app.map.zones[index];if(z.read_only)return;const r=zoneRectangle(z);if(!r){toast('This polygon can be preserved or deleted; rectangle editing is unavailable.');return;}setTool('zone');app.editingZone=index;app.selection=r;app.selectionContext=mapContext(app.map);$('zone-restriction').value=z.can_clean?'mop':z.can_mop?'vacuum':'all';renderSelection();drawMap();}
 async function changeZone(operation,index=null) {
- if(!zoneEditingReady())return false;
- const flags={can_clean:$('zone-restriction').value==='mop',can_mop:$('zone-restriction').value==='vacuum'};
+ if(!zoneEditingReady()||(index!==null&&app.map.zones[index]?.read_only))return false;
+ const classified=app.status?.capabilities.zone_restriction_classes!==false;const flags={can_clean:classified&&$('zone-restriction').value==='mop',can_mop:classified&&$('zone-restriction').value==='vacuum'};
  const base=operation==='delete'?structuredClone(app.map.zones||[]):app.zoneBase,context=operation==='delete'?mapContext(app.map):app.selectionContext,rect=app.selection?{...app.selection}:null;
  if(!base)return false;const target=structuredClone(base);if(operation==='delete')target.splice(index,1);else {const z=rectangleZone(rect,flags);if(operation==='add')target.push(z);else target[index]=z;}
  const ok=await sendCommand('set_forbidden',{operation,index,rect,flags,base_zones:base,map_context:context});
@@ -418,7 +432,7 @@ async function changeZone(operation,index=null) {
 function updateZoneFeedback() {const p=app.pendingZones;if(!p||!app.map?.available)return;const sameMap=JSON.stringify(p.context)===JSON.stringify(mapContext(app.map));if(sameMap&&zoneSignature(p.target)===zoneSignature(app.map.zones)){$('command-result').textContent='Zones confirmed in the robot map.';toast('Zones confirmed by the robot');app.pendingZones=null;}else if(!sameMap||zoneSignature(p.base)!==zoneSignature(app.map.zones)||Date.now()-p.at>30000){$('command-result').textContent='Zone update not confirmed exactly. Review the robot map before retrying.';toast('Review the zones returned by the robot');app.pendingZones=null;}}
 function renderZones() {
  const zones=app.map?.zones || [];const list=$('zone-list');list.classList.toggle('hidden',!zones.length);list.replaceChildren();
- zones.forEach((zone,index)=>{const chip=document.createElement('span');chip.className='zone-chip';const edit=document.createElement('button');edit.textContent=`Zone ${index+1}`;edit.setAttribute('aria-label',`Edit zone ${index+1}`);edit.disabled=!zoneEditingReady();edit.addEventListener('click',()=>editZone(index));chip.append(edit);const remove=document.createElement('button');remove.textContent='×';remove.setAttribute('aria-label',`Remove zone ${index+1}`);remove.disabled=!zoneEditingReady();remove.addEventListener('click',()=>changeZone('delete',index));chip.append(remove);chip.title=zone.can_clean?'No mopping':zone.can_mop?'No vacuuming':'No cleaning or mopping';list.append(chip);});
+ zones.forEach((zone,index)=>{const chip=document.createElement('span');chip.className='zone-chip';const edit=document.createElement('button');edit.textContent=`${zone.kind==='virtual_wall'?'Wall':'Zone'} ${index+1}`;edit.setAttribute('aria-label',`Edit zone ${index+1}`);edit.disabled=zone.read_only||!zoneEditingReady();edit.addEventListener('click',()=>editZone(index));chip.append(edit);const remove=document.createElement('button');remove.textContent='×';remove.setAttribute('aria-label',`Remove zone ${index+1}`);remove.disabled=zone.read_only||!zoneEditingReady();remove.addEventListener('click',()=>changeZone('delete',index));chip.append(remove);chip.title=zone.read_only?(zone.kind==='virtual_wall'?'Virtual wall · read only':'Forbidden polygon · restriction classes unknown · read only'):zone.can_clean?'No mopping':zone.can_mop?'No vacuuming':'No cleaning or mopping';list.append(chip);});
 }
 function visibleMapZones(map) {return (map.zones||[]).filter((zone,index)=>!(app.tool==='zone'&&app.selection&&app.editingZone===index));}
 function zoneAtPoint(point,map) {for(let index=(map.zones||[]).length-1;index>=0;index--){const rect=zoneRectangle(map.zones[index]);if(rect&&insideSelection(point,rect))return index;}return null;}
@@ -441,7 +455,7 @@ function showMapCoordinates(event) {
 }
 const canvas=$('map');canvas.addEventListener('pointerdown',event=>{
  app.hoverScreen={clientX:event.clientX,clientY:event.clientY};showMapCoordinates(event);
- const p=toGrid(event);if(!p||app.busy)return;
+ const p=app.tool==='pan'?toGrid(event):toEditGrid(event);if(!p||app.busy)return;
  if(app.tool==='zone'&&!insideSelection(p,app.selection)&&zoneEditingReady()){const index=zoneAtPoint(p,app.map);if(index!==null)editZone(index);}
  const mode=app.tool==='pan'?'pan':insideSelection(p,app.selection)?'move':'draw';
  if(mode==='draw'){app.selectionContext=mapContext(app.map);if(app.tool==='zone')app.zoneBase=structuredClone(app.map.zones||[]);}
@@ -449,7 +463,7 @@ const canvas=$('map');canvas.addEventListener('pointerdown',event=>{
 });
 canvas.addEventListener('pointermove',event=>{
  app.hoverScreen={clientX:event.clientX,clientY:event.clientY};showMapCoordinates(event);
- const p=toGrid(event);canvas.style.cursor=app.tool!=='pan'&&insideSelection(p,app.selection)?'move':'';if(!app.drag||!p)return;
+ const p=app.tool==='pan'?toGrid(event):toEditGrid(event);canvas.style.cursor=app.tool!=='pan'&&insideSelection(p,app.selection)?'move':'';if(!app.drag||!p)return;
  if(app.drag.mode==='pan'){app.view.panX=app.drag.pan.x+event.clientX-app.drag.screen.x;app.view.panY=app.drag.pan.y+event.clientY-app.drag.screen.y;}
  else if(app.drag.mode==='move'){app.selection=movedSelection(app.drag.rect,app.drag.point,p,app.map);canvas.style.cursor='move';renderSelection();}
  else {const a=app.drag.point,w=app.map.width,h=app.map.height;const x=Math.max(0,Math.min(w,Math.min(a.x,p.x))),y=Math.max(0,Math.min(h,Math.min(a.y,p.y)));app.selection={x:Math.round(x),y:Math.round(y),width:Math.round(Math.max(0,Math.min(w,Math.max(a.x,p.x))-x)),height:Math.round(Math.max(0,Math.min(h,Math.max(a.y,p.y))-y))};renderSelection();}drawMap();

@@ -103,6 +103,42 @@ class Status(unittest.TestCase):
         r,s=self.run_status(value)
         self.assertFalse(s['position']['available'])
 
+    def test_map_position_fallback(self):
+        geometry=dict(map_id='map-A',width=200,height=100,map_origin=[50,50])
+        endpoint=dict(x=70,y=40,kind='recorded_path_endpoint',live=False)
+        m=dict(geometry,available=True,path_endpoint=endpoint,path_changed_at=time.time()-100)
+        def run(map_value, **status):
+            (self.base/'map.json').write_text(json.dumps(map_value))
+            return self.run_status(dict(working_status='Standby',**status))[1]['position']
+        p=run(m)
+        self.assertTrue(p['available']);self.assertFalse(p['fresh'])
+        self.assertEqual(p['source'],'map_path');self.assertEqual(p['quality'],'recorded')
+        self.assertEqual(p['x'],70);self.assertIsNone(p['heading']);self.assertIsNone(p['resolution_m'])
+        self.assertGreaterEqual(p['age_s'],100)
+        _,human=self.run_status(dict(working_status='Standby'),human=True)
+        self.assertIn('recorded, map_path',human);self.assertIn('heading unavailable',human)
+        self.assertNotIn('nan',human.lower())
+        estimate=dict(endpoint,x=75,kind='recent_path_estimate',received_at=time.time())
+        m['position_estimate']=estimate
+        self.assertEqual(run(m)['quality'],'estimated')
+        for stamp in (time.time()-60,time.time()+60,0):
+            m['position_estimate']=dict(estimate,received_at=stamp)
+            self.assertEqual(run(m)['quality'],'recorded')
+        pose=dict(geometry,x=80,y=45,heading=0.5,resolution_m=0.05,
+                  frame='map_grid',kind='navigation_pose_cache',cache_read_at=time.time())
+        self.assertEqual(run(m,navigation_pose=pose)['source'],'navigation_memory')
+        for bad in (dict(pose,map_id='other'),dict(pose,cache_read_at=time.time()-60)):
+            self.assertEqual(run(m,navigation_pose=bad)['source'],'map_path')
+        for badmap in (dict(m,available=False),dict(m,reset_pending=True),dict(m,map_origin=[]),
+                       dict(m,path_endpoint=dict(endpoint,x=200)),dict(m,path_endpoint=None)):
+            self.assertFalse(run(badmap)['available'])
+        self.assertFalse(run(m,map_reset_pending=True)['available'])
+        self.assertFalse(run(m,map_reset_pending={'phase':'waiting'})['available'])
+        del m['path_changed_at'];self.assertIsNone(run(m)['age_s'])
+        m['position']=dict(x=90,y=30,heading=99)
+        self.assertEqual(run(m)['quality'],'reported');self.assertIsNone(run(m)['heading'])
+        (self.base/'map.json').unlink()
+
     def test_invalid_arguments(self):
         r=subprocess.run([str(self.binary),'status','--xml'],capture_output=True)
         self.assertEqual(r.returncode,2)

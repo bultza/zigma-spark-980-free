@@ -1,7 +1,8 @@
-/* Caccamora native import: one trusted raw hoslam_map in a generated tar.gz.
+/* Validated native import: one trusted raw hoslam_map in a generated tar.gz.
    Never accepts archives, shell fragments or caller-supplied staging paths. */
 static bool restore_checksum(const struct map *m){
- if(m->size<156||m->grid<156)return false;
+ if(m->size<156||(!m->protobuf&&m->grid<156)||
+    (m->protobuf&&u32(m->data+4)!=2))return false;
  uint32_t sum=0;for(size_t i=0;i<m->size;i++)if(i<152||i>=156)sum+=m->data[i];
  return sum==u32(m->data+152);
 }
@@ -18,19 +19,42 @@ static bool restore_package(const struct map *m,const char *dest){
  put32(gz+off,gzip_crc(tar,size));put32(gz+off+4,(uint32_t)size);off+=8;free(tar);
  int fd=open(dest,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600);bool ok=fd>=0&&write_bytes(fd,gz,off);free(gz);if(fd>=0&&close(fd))ok=false;if(!ok)unlink(dest);return ok;
 }
+static bool restore_format_supported(const struct map_native_profile *p,const struct map *m){
+ return p&&p->restore_supported&&(p==&robojet_map_profile?(m->protobuf&&u32(m->data+4)==2):!m->protobuf);
+}
 static cJSON *restore_context(const char *pid){
  uint32_t id;if(!native_restore_supported(pid)||!native_identity(pid,&id))return NULL;
  cJSON *o=cJSON_CreateObject();char text[16];snprintf(text,sizeof(text),"%u",id);cJSON_AddStringToObject(o,"id",text);cJSON_AddBoolToObject(o,"idle",native_idle(pid));
  struct stat log;if(!stat("/tmp/app_server.log",&log)&&S_ISREG(log.st_mode)){cJSON_AddNumberToObject(o,"log_inode",log.st_ino);cJSON_AddNumberToObject(o,"log_offset",log.st_size);}return o;
 }
+/* The native logger can retain a different TZ from the web process. */
+static time_t restore_log_time(const char *line,const char *zone){
+ struct tm wall={0};int year,month;
+ if(sscanf(line,"[%d-%d-%d %d:%d:%d",&year,&month,&wall.tm_mday,&wall.tm_hour,&wall.tm_min,&wall.tm_sec)!=6)return 0;
+ wall.tm_year=year-1900;wall.tm_mon=month-1;
+ const char *current=getenv("TZ");char *saved=current?strdup(current):NULL;
+ if(zone)setenv("TZ",zone,1);else unsetenv("TZ");tzset();
+ wall.tm_isdst=-1;time_t at=mktime(&wall);
+ if(saved){setenv("TZ",saved,1);free(saved);}else unsetenv("TZ");tzset();return at;
+}
+static bool restore_process_zone(const char *pid,char zone[256],bool *present){
+ uint32_t n;if(!map_id(pid,&n)||n<2)return false;
+ char path[80];snprintf(path,sizeof path,"/proc/%u/environ",n);FILE *f=fopen(path,"rb");if(!f)return false;
+ char env[65536];size_t len=fread(env,1,sizeof env,f);bool ok=!ferror(f)&&len<sizeof env;fclose(f);if(!ok)return false;
+ *present=false;
+ for(size_t i=0;i<len;){size_t size=strnlen(env+i,len-i);if(size==len-i)return false;
+  if(size>=3&&!memcmp(env+i,"TZ=",3)){if(size-3>=256)return false;memcpy(zone,env+i+3,size-3);zone[size-3]=0;*present=true;return true;}i+=size+1;
+ }return true;
+}
 static int restore_probe(const char *pid,const char *json){
  cJSON *r=cJSON_Parse(json),*o=restore_context(pid);if(!o){cJSON_Delete(r);return lib_error("Native restore context unavailable");}
+ char zone[256];bool present=false,zone_known=restore_process_zone(pid,zone,&present);
  cJSON *ino=item(r,"log_inode"),*offset=item(r,"log_offset");FILE *f=fopen("/tmp/app_server.log","rb");struct stat st;int result=-999;time_t result_at=0;
  if(f&&cJSON_IsNumber(ino)&&cJSON_IsNumber(offset)&&offset->valuedouble>=0&&!fstat(fileno(f),&st)&&st.st_ino==(ino_t)ino->valuedouble&&st.st_size>=offset->valuedouble&&st.st_size-offset->valuedouble<=262144&&fseeko(f,(off_t)offset->valuedouble,SEEK_SET)==0){
-  char line[4096];while(fgets(line,sizeof(line),f)){char *p=strstr(line,"send set map result: ");int value;if(p&&sscanf(p,"send set map result: %d",&value)==1){result=value;struct tm wall={0};int year,month;if(sscanf(line,"[%d-%d-%d %d:%d:%d",&year,&month,&wall.tm_mday,&wall.tm_hour,&wall.tm_min,&wall.tm_sec)==6){wall.tm_year=year-1900;wall.tm_mon=month-1;wall.tm_isdst=-1;result_at=mktime(&wall);}else result_at=0;}}
+  char line[4096];while(fgets(line,sizeof(line),f)){char *p=strstr(line,"send set map result: ");int value;if(p&&sscanf(p,"send set map result: %d",&value)==1){result=value;result_at=zone_known?restore_log_time(line,present?zone:NULL):0;}}
  }
  if(f)fclose(f);
- cJSON_AddBoolToObject(o,"result_seen",result!=-999);if(result!=-999)cJSON_AddBoolToObject(o,"restored",result==0);if(result_at>0)cJSON_AddNumberToObject(o,"result_at",result_at);cJSON_Delete(r);return print_json(o);
+ cJSON_AddBoolToObject(o,"result_seen",result!=-999);if(result!=-999){cJSON_AddBoolToObject(o,"restored",result==0);cJSON_AddNumberToObject(o,"result_code",result);}if(result_at>0)cJSON_AddNumberToObject(o,"result_at",result_at);cJSON_Delete(r);return print_json(o);
 }
 static int native_restore_command(const char *pid,const char *json,bool dry){
  cJSON *r=cJSON_Parse(json);const char *error=NULL;uint32_t expected=0,target=0;struct map m={0};int lib=-1,lock=-1;char stage[96]={0},archive[128]={0};bool sent=false,stage_created=false;
@@ -43,6 +67,9 @@ static int native_restore_command(const char *pid,const char *json,bool dry){
  cJSON *decoded=preview(&m);if(!decoded){error="Master cannot be decoded";goto done;}cJSON_Delete(decoded);
  if(!dry){
   if(!native_restore_supported(pid)){error="Native restore is not validated for this firmware";goto done;}
+  int profile_fd=native_map_fd(pid);const struct map_native_profile *profile=profile_fd>=0?map_profile_fd(profile_fd):NULL;
+  bool format_ok=restore_format_supported(profile,&m);if(profile_fd>=0)close(profile_fd);
+  if(!format_ok){error="Map format is not supported by this native firmware";goto done;}
   uint32_t now;if(!native_identity(pid,&now)||now!=expected||!native_idle(pid)){error="Robot must be idle with unchanged map identity";goto done;}
   struct stat st;const char *reserved[]={"/tmp/tmp.tar","/tmp/tmp.tar.gz","/tmp/hoslam_map"};for(int i=0;i<3;i++)if(lstat(reserved[i],&st)==0||errno!=ENOENT){error="Native import workspace is occupied; no restore sent";goto done;}
   int source=open(string(r,"source_dir"),O_RDONLY|O_DIRECTORY|O_NOFOLLOW);if(source<0){error="Robot maps unavailable";goto done;}
@@ -63,9 +90,28 @@ static int native_restore_command(const char *pid,const char *json,bool dry){
  uint32_t last;if(!native_identity(pid,&last)||last!=expected||!native_idle(pid)){cJSON_Delete(payload);error="Robot context changed; no restore sent";goto done;}
  char *wire=cJSON_PrintUnformatted(payload);cJSON_Delete(payload);if(!wire){error="Restore encoding failed";goto done;}
  struct {long type;char text[4096];} message={9,{0}};snprintf(message.text,sizeof(message.text),"%s",wire);free(wire);key_t key=ftok("/",1);int q=key==(key_t)-1?-1:msgget(key,0);
- if(q<0||msgsnd(q,&message,sizeof(message.text),IPC_NOWAIT)){error="Restore was not dispatched; backups kept";goto done;}sent=true;
+ /* Bind the outgoing app queue to the reviewed process, too. */
+ struct msqid_ds receiver;uint32_t requested_pid=0;char receiver_task[96];struct stat receiver_st;
+ if(q<0||!map_id(pid,&requested_pid)||msgctl(q,IPC_STAT,&receiver)||receiver.msg_lrpid<=0){error="Native app queue identity changed; no restore sent";goto done;}
+ snprintf(receiver_task,sizeof receiver_task,"/proc/%u/task/%d",requested_pid,receiver.msg_lrpid);
+ if(stat(receiver_task,&receiver_st)||!S_ISDIR(receiver_st.st_mode)){error="Native app queue receiver changed; no restore sent";goto done;}
+ if(msgsnd(q,&message,sizeof(message.text),IPC_NOWAIT)){error="Restore was not dispatched; backups kept";goto done;}sent=true;
  done:
  free(m.data);if(lock>=0){flock(lock,LOCK_UN);close(lock);}if(lib>=0)close(lib);cJSON_Delete(r);
  if(!sent){if(*archive)unlink(archive);if(stage_created)rmdir(stage);return lib_error(error?error:"Restore failed");}
  cJSON *out=cJSON_CreateObject();cJSON_AddBoolToObject(out,"accepted",true);cJSON_AddStringToObject(out,"result","delivered_to_local_queue");return print_json(out);
+}
+
+/* Remove only our completed import's byte-identical extraction. Never remove
+ * an unknown vendor workspace or an archive that may still be in flight. */
+static int restore_cleanup(const char *pid,const char *json){
+ cJSON *r=cJSON_Parse(json);uint32_t id,current;struct map expected={0},raw={0};int lib=-1,tmp=-1;bool ok=false;char name[48],stage[96],archive[128];struct stat st;
+ if(!uid_valid(string(r,"uid"))||!uid_valid(string(r,"operation_uid"))||!map_id(string(r,"id"),&id)||!id||strcmp(string(r,"phase"),"new_map_observed")||!cJSON_IsTrue(item(r,"native_confirmed"))||!native_identity(pid,&current)||current!=id||!native_idle(pid))goto done;
+ snprintf(stage,sizeof stage,"/tmp/zigma-restore-%s",string(r,"operation_uid"));snprintf(archive,sizeof archive,"%s/map.tar.gz",stage);
+ const char *reserved[]={archive,"/tmp/tmp.tar","/tmp/tmp.tar.gz"};for(size_t i=0;i<3;i++)if(!lstat(reserved[i],&st)||errno!=ENOENT)goto done;
+ lib=open(string(r,"library_dir"),O_RDONLY|O_DIRECTORY|O_NOFOLLOW);tmp=open("/tmp",O_RDONLY|O_DIRECTORY|O_NOFOLLOW);if(lib<0||tmp<0)goto done;
+ lib_path(name,string(r,"uid"),"map");if(!read_named_map(lib,name,id,&expected)||!read_named_map(tmp,"hoslam_map",id,&raw)||expected.size!=raw.size||memcmp(expected.data,raw.data,raw.size))goto done;
+ ok=!unlinkat(tmp,"hoslam_map",0);if(ok)rmdir(stage);
+ done:free(expected.data);free(raw.data);if(lib>=0)close(lib);if(tmp>=0)close(tmp);cJSON_Delete(r);
+ cJSON *o=cJSON_CreateObject();cJSON_AddBoolToObject(o,"cleaned",ok);return print_json(o);
 }

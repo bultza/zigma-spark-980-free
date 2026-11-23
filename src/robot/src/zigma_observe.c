@@ -112,22 +112,26 @@ static cJSON *cached_navigation_pose(int fd,const cJSON *geometry,const struct n
  cJSON_AddStringToObject(o,"kind","navigation_pose_cache");cJSON_AddStringToObject(o,"frame","map_grid");cJSON_AddNumberToObject(o,"cache_read_at",time(NULL));cJSON_AddNullToObject(o,"measured_at");cJSON_AddBoolToObject(o,"live",false);return o;
 }
 static void enrich_navigation_pose(cJSON *status){
- if(!nav_pid||!map_geometry)return;
+ if(!nav_pid)return;
  char path[128];
  if(!zigma_native_process(nav_pid,"/root/hoslam/demo_rplidar"))return;
- snprintf(path,sizeof(path),"/proc/%d/mem",nav_pid);int fd=open(path,O_RDONLY);if(fd<0)return;
- cJSON *pose=cached_navigation_pose(fd,map_geometry,navigation_profile_process(nav_pid));close(fd);if(pose)cJSON_AddItemToObject(status,"navigation_pose",pose);
+ const struct navigation_profile *profile=navigation_profile_process(nav_pid);
+ cJSON *support=cJSON_CreateObject();cJSON_AddStringToObject(support,"profile",profile?profile->name:"unknown");cJSON_AddBoolToObject(support,"memory_reads",profile&&profile->slot);replace_value(status,"navigation_support",support);
+ if(!profile||!profile->slot||!map_geometry)return;
+ snprintf(path,sizeof(path),"/proc/%d/mem",nav_pid);int fd=open(path,O_RDONLY|O_CLOEXEC);if(fd<0)return;
+ cJSON *pose=cached_navigation_pose(fd,map_geometry,profile);close(fd);if(pose)cJSON_AddItemToObject(status,"navigation_pose",pose);
 }
 static void remember_map_geometry(cJSON *map){
  cJSON_Delete(map_geometry);map_geometry=cJSON_CreateObject();
  for(const char **k=(const char*[]){"map_id","width","height","map_origin",NULL};*k;k++){cJSON *v=get(map,*k);if(v)cJSON_AddItemToObject(map_geometry,*k,cJSON_Duplicate(v,1));}
 }
 static bool cached_status_profile(cJSON *status,int fd,const struct zigma_app_profile *profile){
- if(!profile||profile->status_size!=100)return false;
- uint32_t initialized=0,again=0;int32_t a[25],b[25];
- if(!memory_read(fd,profile->initialized,&initialized,4)||initialized!=1||!memory_read(fd,profile->status,a,sizeof(a))||!memory_read(fd,profile->status,b,sizeof(b))||memcmp(a,b,sizeof(a))||!memory_read(fd,profile->initialized,&again,4)||again!=1)return false;
+ if(!profile||(profile->status_size!=100&&profile->status_size!=92))return false;
+ size_t size=profile->status_size;
+ uint32_t initialized=0,again=0;int32_t a[25]={0},b[25]={0};
+ if(!memory_read(fd,profile->initialized,&initialized,4)||initialized!=1||!memory_read(fd,profile->status,a,size)||!memory_read(fd,profile->status,b,size)||memcmp(a,b,size)||!memory_read(fd,profile->initialized,&again,4)||again!=1)return false;
  int state=a[0],battery=a[3],area=a[9],minutes=a[10],error=a[11];
- if(!strcmp(vendor_state(state),"unknown")||battery<0||battery>100||area<0||area>100000||minutes<0||minutes>10080||error<0||error>255)return false;
+ if(!strcmp(vendor_state(state),"unknown")||battery<0||battery>100||area<0||area>(size==92?65535:100000)||minutes<0||minutes>(size==92?65535:10080)||error<0||error>255)return false;
  bool matching=number(status,"vendor_state_code")==state&&number(status,"battery_level")==battery&&number(status,"vendor_clean_area_raw")==area&&number(status,"vendor_clean_time_raw")==minutes&&number(status,"vendor_error_code")==error;
  if(!matching)replace_value(status,"observed_at",cJSON_CreateNumber(0));
  replace_value(status,"working_status",cJSON_CreateString(vendor_state(state)));
@@ -141,7 +145,12 @@ static bool cached_status_profile(cJSON *status,int fd,const struct zigma_app_pr
  }
  unsigned char volume=255,volume_again=254;
  if(memory_read(fd,profile->volume,&volume,1)&&memory_read(fd,profile->volume,&volume_again,1)&&volume==volume_again&&volume<=100)replace_value(status,"volume",cJSON_CreateNumber(volume));
- replace_value(status,"statistics_units_source",cJSON_CreateString("vendor_history_contract"));
+ if(profile->status_size==92){
+  /* Exact app binary forwards +0x24/+0x28 unchanged as CleanArea/CleanTime.
+   * Use the existing JSON contract (m2/minutes), provisionally: the physical
+   * units are not independently established for this profile. Keep raw values. */
+  replace_value(status,"statistics_units_source",cJSON_CreateString("robojet_json_contract_provisional"));
+ }else replace_value(status,"statistics_units_source",cJSON_CreateString("vendor_history_contract"));
  replace_value(status,"telemetry_source",cJSON_CreateString("app_server_cache"));replace_value(status,"cache_read_at",cJSON_CreateNumber(time(NULL)));
  return true;
 }
@@ -153,10 +162,9 @@ static int open_cache(void){
 }
 #include "zigma_puron_settings.h"
 static void enrich_status(cJSON *status){
+ const struct zigma_app_profile *profile=zigma_app_profile_process(cache_pid);if(!profile)return;
  int fd=open_cache();if(fd<0)return;
  bool ok;
- const struct zigma_app_profile *profile=zigma_app_profile_process(cache_pid);
- if(!profile){close(fd);return;}
  replace_value(status,"app_server_profile",cJSON_CreateString(profile->name));
  if(!strcmp(profile->name,"puron")){
   ok=cached_puron_status(status,fd);cached_puron_settings(status,fd);
@@ -179,17 +187,18 @@ static bool cached_zones_at(cJSON *map,int fd,uint32_t slot){
   cJSON_AddItemToObject(zone,"points",points);cJSON_AddBoolToObject(zone,"can_clean",type!=2&&type!=3);cJSON_AddBoolToObject(zone,"can_mop",type!=1&&type!=3);cJSON_AddNumberToObject(zone,"id",i+1);cJSON_AddStringToObject(zone,"source","vendor_cache");cJSON_AddItemToArray(zones,zone);
  }replace_value(map,"zones",zones);cJSON_AddBoolToObject(map,"zones_available",true);cJSON_AddNumberToObject(map,"zones_read_at",time(NULL));return true;
 }
+#include "zigma_robojet_zones.h"
 static bool enrich_zones(cJSON *map){
  if(!cache_pid){return false;}char file[128];if(!zigma_native_process(cache_pid,"/root/app_server/wifi_app_server_grit"))return false;
- snprintf(file,sizeof(file),"/proc/%d/mem",cache_pid);int fd=open(file,O_RDONLY);if(fd<0)return false;
- const struct zigma_app_profile *profile=zigma_app_profile_process(cache_pid);
- bool ok=profile&&cached_zones_at(map,fd,profile->zones);
+ const struct zigma_app_profile *profile=zigma_app_profile_process(cache_pid);if(!profile)return false;
+ snprintf(file,sizeof(file),"/proc/%d/mem",cache_pid);int fd=open(file,O_RDONLY|O_CLOEXEC);if(fd<0)return false;
+ bool ok=!strcmp(profile->name,"robojet-issue08")?cached_robojet_zones(map,fd):cached_zones_at(map,fd,profile->zones);
  close(fd);return ok;
 }
 /* Configuration replies can replace the full map in SHM. Keep raster/path as
  * received and refresh only the independently observed zone cache. */
 static char *published_zone_signature=NULL;
-static char *zone_signature(cJSON *map){return cJSON_PrintUnformatted(get(map,"zones"));}
+static char *zone_signature(cJSON *map){cJSON *o=cJSON_CreateObject();cJSON_AddItemToObject(o,"zones",cJSON_Duplicate(get(map,"zones"),1));cJSON_AddBoolToObject(o,"read_only",cJSON_IsTrue(get(map,"zones_read_only")));cJSON_AddBoolToObject(o,"available",cJSON_IsTrue(get(map,"zones_available")));char *s=cJSON_PrintUnformatted(o);cJSON_Delete(o);return s;}
 static cJSON *published_map(const char *dir){
  char file[1024];snprintf(file,sizeof(file),"%s/map.json",dir);FILE *f=fopen(file,"rb");if(!f)return NULL;
  struct stat st;if(fstat(fileno(f),&st)||st.st_size<=0||st.st_size>2*1024*1024){fclose(f);return NULL;}
@@ -198,8 +207,8 @@ static cJSON *published_map(const char *dir){
 }
 static bool merge_zone_cache(cJSON *map,cJSON *probe){
  const char *keys[]={"map_id","width","height","map_origin"};for(int i=0;i<4;i++)if(!cJSON_Compare(get(map,keys[i]),get(probe,keys[i]),1))return false;
- if(!cJSON_IsTrue(get(probe,"zones_available"))||!cJSON_IsArray(get(probe,"zones"))||cJSON_Compare(get(map,"zones"),get(probe,"zones"),1))return false;
- replace_value(map,"zones",cJSON_Duplicate(get(probe,"zones"),1));replace_value(map,"zones_available",cJSON_CreateBool(1));replace_value(map,"zones_read_at",cJSON_Duplicate(get(probe,"zones_read_at"),1));return true;
+ if(!cJSON_IsTrue(get(probe,"zones_available"))||!cJSON_IsArray(get(probe,"zones"))||(cJSON_IsTrue(get(map,"zones_available"))&&cJSON_Compare(get(map,"zones"),get(probe,"zones"),1)&&cJSON_IsTrue(get(map,"zones_read_only"))==cJSON_IsTrue(get(probe,"zones_read_only"))))return false;
+ replace_value(map,"zones",cJSON_Duplicate(get(probe,"zones"),1));replace_value(map,"zones_available",cJSON_CreateBool(1));replace_value(map,"zones_read_at",cJSON_Duplicate(get(probe,"zones_read_at"),1));replace_value(map,"zones_read_only",cJSON_CreateBool(cJSON_IsTrue(get(probe,"zones_read_only"))));return true;
 }
 static void remember_published_map(cJSON *map){remember_map_geometry(map);free(published_zone_signature);published_zone_signature=zone_signature(map);}
 static cJSON *refresh_published_zones(const char *dir){
@@ -238,7 +247,7 @@ static cJSON *spatial_document(cJSON *raw,bool geometry_only){
  char *signature=cJSON_PrintUnformatted(path);if(signature){if(last_path_signature&&strcmp(signature,last_path_signature))path_changed_at=time(NULL);free(last_path_signature);last_path_signature=signature;}
  cJSON_AddNumberToObject(o,"path_changed_at",path_changed_at);
  if(path_changed_at&&time(NULL)-path_changed_at<=6&&cJSON_GetArraySize(path)){cJSON *estimate=cJSON_Duplicate(cJSON_GetArrayItem(path,cJSON_GetArraySize(path)-1),1);cJSON_AddStringToObject(estimate,"kind","recent_path_estimate");cJSON_AddNumberToObject(estimate,"received_at",path_changed_at);cJSON_AddNullToObject(estimate,"heading");cJSON_AddItemToObject(o,"position_estimate",estimate);}
- if(enrich_zones(o)){cJSON_ReplaceItemInObjectCaseSensitive(o,"warning",cJSON_CreateString("No-go zones read from robot. Position is estimated from recent path updates; heading unavailable."));}
+ if(enrich_zones(o)){cJSON_ReplaceItemInObjectCaseSensitive(o,"warning",cJSON_CreateString(cJSON_IsTrue(get(o,"zones_read_only"))?"Recorded walls and forbidden polygons · read only; restriction classes and freshness unknown. Position follows recorded path; heading unavailable.":"No-go zones read from robot. Position is estimated from recent path updates; heading unavailable."));}
  /* A recent path endpoint is an estimate, never an independently measured pose. */
  return o;
 }

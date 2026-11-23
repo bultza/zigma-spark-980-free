@@ -11,6 +11,11 @@ static cJSON *request_dry(const char *request,bool clear){
 }
 static cJSON *deletion(const char *request){return request_dry(request,false);}
 int main(void){
+ setenv("TZ","UTC",1);tzset();
+ assert(restore_log_time("[2026-11-24 03:22:25 I] result", "CST-8")==1795461745);
+ assert(restore_log_time("[2026-11-23 20:22:25 I] result", "CET-1")==1795461745);
+ assert(!strcmp(getenv("TZ"),"UTC"));assert(restore_log_time("not a timestamp","UTC")==0);
+
  char file[]="/tmp/zigma-map-native-XXXXXX";int fd=mkstemp(file);assert(fd>=0);unlink(file);
  for(size_t i=0;i<sizeof(map_profiles)/sizeof(*map_profiles);i++){
   assert(ftruncate(fd,0)==0);const struct map_native_profile *p=&map_profiles[i];
@@ -31,6 +36,17 @@ int main(void){
  word(fd,0x3a5a24,0x3c26d0);word(fd,0x3a5d80,0x3c26d4);word(fd,0x3c26d0,1);word(fd,0x3c2718,21);uint32_t nid;
  assert(puron_navigation_identity_fd(fd,&nid)&&nid==21);word(fd,0x3c2718,0);assert(puron_navigation_identity_fd(fd,&nid)&&nid==0);
  word(fd,0x3c26d0,0);assert(!puron_navigation_identity_fd(fd,&nid));word(fd,0x3c26d0,1);word(fd,0x3a5d80,0);assert(!puron_navigation_identity_fd(fd,&nid));
+ assert(ftruncate(fd,0)==0);
+ assert(pwrite(fd,robojet_import_prefix,sizeof robojet_import_prefix,0x1c67c)==sizeof robojet_import_prefix);
+ word(fd,0x43e08,1);unsigned char rs[92]={0};put32(rs,4);assert(pwrite(fd,rs,sizeof rs,0x4395c)==sizeof rs);
+ assert(map_profile_fd(fd)==&robojet_map_profile&&map_idle_fd(fd));assert(!map_identity_fd(fd,&nid));assert(!robojet_map_profile.clear_supported);
+ word(fd,0x4395c+44,1);assert(!map_idle_fd(fd));word(fd,0x4395c+44,0);word(fd,0x43e08,0);assert(!map_idle_fd(fd));
+ assert(ftruncate(fd,0)==0);
+ unsigned char rn[]={0x41,0xf6,0x34,0x30,0x08,0xb5,0xc0,0xf2,0xa2,0x00,0x03,0x78,0xbf,0xf3,0x5b,0x8f,0xdb,0x07,0x04,0xd5,0x41,0xf6,0x38,0x30,0xc0,0xf2,0xa2,0x00},rg[]={0x60,0x6c,0x03,0xb0,0x30,0xbd};
+ assert(pwrite(fd,rn,sizeof rn,0x27bdf0)==sizeof rn);assert(pwrite(fd,rg,sizeof rg,0x379dec)==sizeof rg);
+ word(fd,0xa21b34,1);word(fd,0xa21b7c,11);assert(robojet_navigation_identity_fd(fd,&nid)&&nid==11);
+ word(fd,0xa21b7c,0xffffffff);assert(!robojet_navigation_identity_fd(fd,&nid));word(fd,0xa21b7c,0);assert(robojet_navigation_identity_fd(fd,&nid)&&nid==0);
+ word(fd,0xa21b34,0);assert(!robojet_navigation_identity_fd(fd,&nid));word(fd,0xa21b34,1);rn[0]^=1;assert(pwrite(fd,rn,sizeof rn,0x27bdf0)==sizeof rn);assert(!robojet_navigation_identity_fd(fd,&nid));
  assert(ftruncate(fd,0)==0);assert(!map_identity_fd(fd,&(uint32_t){0})&&!map_idle_fd(fd));close(fd);
  cJSON *o=deletion("{\"id\":\"18\",\"active_id\":\"18\",\"confirm\":true}");assert(item(o,"error")&&!item(o,"cmd"));cJSON_Delete(o);
  o=deletion("{\"id\":\"16\",\"active_id\":\"18\",\"confirm\":false}");assert(item(o,"error"));cJSON_Delete(o);

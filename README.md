@@ -2,13 +2,13 @@
 
 In August 2026, all Zigma Spark-980 robots lost its WiFi connectivity all over the world. During the investigation, we captured a command delivered through the cloud service that disables the Wi-Fi on the robot (an auto destruct command!). A similar loss of app control affected the Redmond RV-R670S in October, when we found expired TLS certificates on the service's HTTPS endpoints. [Skip to how we discovered access](hack/HISTORY.md) if you’re here for the hack.
 
-If you just want to install it on your Zigma (or Redmond or Puron) robots, go directly to the [Installation Manual](installer/README.md)
+If you just want to install it on your Zigma (or Redmond, Puron or RoboJet) robots, go directly to the [Installation Manual](installer/README.md)
 
 The Zigma Spark-980 is a robot vacuum cleaner that uses a LiDAR laser scanner to map your home and navigate as it cleans. It returns to its charging dock on its own and was originally controlled through a mobile app that relied on the manufacturer's cloud service.
 
 I started building Zigma Free to get my robot back under my control and make it easier to use. More than anything, I wanted it to clean my house every day on its own again.
 
-With Zigma Free, you can control the vacuum from a web browser on your local network, over SSH, or through a Telegram bot when you're away from home. Everyday control works independently of the manufacturer's cloud. The live LiDAR view shows what the robot's laser scanner detects.
+With Zigma Free, you can control the vacuum from a web browser on your local network, over SSH, or through a Telegram bot when you're away from home. Everyday control works independently of the manufacturer's cloud. On supported navigation profiles, the live LiDAR view shows what the robot's laser scanner detects.
 
 Daily cleaning schedules run on the robot's own clock, so they work even without Wi-Fi. If the robot loses track of time after being powered off, set the clock again so cleaning starts at the right time.
 
@@ -24,11 +24,42 @@ The installer will be able to access and expose the SSH of your robots for these
 ### Partially compatible models
 
 - **Puron PR10** - Currently under testing
+- **RoboJet X-One (Issue08)** - Exact-profile support, tested using its adapted firmware on Ciccia. Maps, map-derived position, settings, area commands and general no-go polygons are implemented; live LiDAR and navigation-memory pose are not enabled. See the [support matrix](hack/ROBOJET_ISSUE08_SUPPORT.md).
 
 ### Potentially compatible models
 
 - **Redmond RV-R670S** - I need beta testers so please try the installer and report with an issue!
 - **Redmond RV-R650S** - It has not lidar but it should be possible to at least get a SSH terminal.
+
+## Firmware variants and RC16 findings
+
+Compatibility is selected by flash layout and exact component hashes, not by the
+model name alone. The **Issue10** direct kernel16 profile is included, with its
+reviewed startup scripts and existing Zigma navigation/app pair. Its original
+hardware installation and cold boot still need owner validation. Unknown or mixed
+components retain the installer fallback rather than inheriting another profile's
+permissions. See [firmware variants](hack/FIRMWARE_VARIANTS.md).
+
+RoboJet uses a different app-cache layout and `relo` v2 saved maps. RC16 includes
+the bounded v2 decoder, byte-preserving protected copies, map-derived robot
+coordinates, general no-go polygon editing, area commands, and area/time statistics
+(m² and minutes, converted to seconds in the API). Nonzero physical measurements
+are still needed to verify the statistics' scale. Navigation RAM and live LiDAR
+remain unavailable for this exact executable.
+
+Native restoration was verified with the same map and with a converted Caccamora
+map using another ID. Both imports returned native success and published their
+maps. The converted map's file and selected ID survived reboot, but a usable live
+map was not republished automatically. Full reload/localization and reliable
+restoration after standby therefore remain unvalidated. A queued request is not
+completion; keep protected backups and do not automatically repeat an uncertain
+operation. The conversion is a private test artifact, not a supported cross-model
+map converter. See [native map import and validation](hack/ROBOJET_MAP_IMPORT.md).
+
+RC16 also applies the web-selected timezone to native processes at the next boot.
+Already-running processes can retain their previous timezone until then. Every new
+firmware variant must be audited for timezone overrides; the RoboJet override must
+not be assumed to exist on other variants.
 
 ## Features
 
@@ -36,7 +67,7 @@ The web interface and control software run on the robot itself. The original nav
 
 - Run weekly cleaning schedules locally using cron.
 - Start, pause, or resume cleaning, or send the robot back to its dock.
-- View the current map, manage saved maps, and see live LiDAR readings.
+- View the current map, manage protected saved-map copies, and see live LiDAR readings where the firmware profile supports them.
 - Adjust voice volume and manage voice prompts.
 - Access the robot over SSH or control it remotely through Telegram.
 

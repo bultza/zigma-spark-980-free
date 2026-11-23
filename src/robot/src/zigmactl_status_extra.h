@@ -45,20 +45,8 @@ static cJSON *ctl_wifi(double epoch){
  if(*ip)cJSON_AddStringToObject(w,"ipv4",ip);else cJSON_AddNullToObject(w,"ipv4");
  cJSON_AddNumberToObject(w,"observed_at",epoch);return w;
 }
+#include "zigma_position.h"
 static cJSON *ctl_position(cJSON *in,double epoch){
- cJSON *p=nv(in,"navigation_pose"),*map=nav_read(ZIGMACTL_MAP_PATH),*o=cJSON_CreateObject();
- double x=nn(p,"x"),y=nn(p,"y"),heading=nn(p,"heading"),res=nn(p,"resolution_m"),age=epoch-nn(p,"cache_read_at");
- bool ok=cJSON_IsObject(p)&&cJSON_IsObject(map)&&!strcmp(ns(p,"kind"),"navigation_pose_cache")&&!strcmp(ns(p,"frame"),"map_grid")&&*ns(p,"map_id")&&isfinite(x)&&isfinite(y)&&isfinite(heading)&&fabs(heading)<=3.141593&&isfinite(res)&&res>=0.001&&res<=1&&isfinite(age)&&age>=0&&age<=15&&x>=0&&y>=0&&x<nn(p,"width")&&y<nn(p,"height");
- const char *keys[]={"map_id","width","height","map_origin",NULL};
- for(int i=0;keys[i];i++)if(!nv(p,keys[i])||!nv(map,keys[i])||!cJSON_Compare(nv(p,keys[i]),nv(map,keys[i]),1))ok=false;
- cJSON *origin=nv(p,"map_origin");
- if(cJSON_GetArraySize(origin)!=2||!cJSON_IsNumber(cJSON_GetArrayItem(origin,0))||!cJSON_IsNumber(cJSON_GetArrayItem(origin,1)))ok=false;
- cJSON_AddBoolToObject(o,"available",ok);cJSON_AddBoolToObject(o,"fresh",false);
- cJSON_AddStringToObject(o,"quality",ok?"cached":"unavailable");
- cJSON_AddStringToObject(o,"frame","map_grid");cJSON_AddStringToObject(o,"units","cells");cJSON_AddStringToObject(o,"heading_units","radians");
- const char *fields[]={"x","y","map_id","width","height","map_origin","cache_read_at","resolution_m",NULL};
- for(int i=0;fields[i];i++)if(ok)cJSON_AddItemToObject(o,fields[i],cJSON_Duplicate(nv(p,fields[i]),1));else cJSON_AddNullToObject(o,fields[i]);
- if(ok)cJSON_AddNumberToObject(o,"heading",heading);else cJSON_AddNullToObject(o,"heading");
- cJSON_AddNullToObject(o,"measured_at");cJSON_Delete(map);return o;
+ cJSON *map=nav_read(ZIGMACTL_MAP_PATH),*o=position_select(in,map,epoch);cJSON_Delete(map);return o;
 }
 #endif

@@ -45,6 +45,75 @@ class FirmwareChecks(unittest.TestCase):
         outcome = next(line for line in result.stdout.splitlines() if line.startswith('RESULT:'))
         return outcome, result.stdout + result.stderr
 
+    def test_issue10_full_and_strict_components(self):
+        base = 'direct-kernel16'
+        cp = CATALOG['variants'][base]['component_profiles'][0]
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(base, changed=cp['files'], requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/usr/bin:/usr/lib:/lib')
+            self.assertIn('Firmware recognized: ciccio-issue10-kernel16', output)
+        for path in cp['files']:
+            for value in (None, 'a'*64):
+                changed = dict(cp['files']); changed[path] = value
+                with self.subTest(path=path, value=value):
+                    self.assertTrue(self.run_checks(base, changed=changed)[0].startswith('RESULT:ssh:1:'))
+        # A known alternate startup script does not authorize a Puron pair.
+        changed = dict(cp['files'])
+        changed.update(CATALOG['variants'][BASE]['native_pairs'][0]['files'])
+        self.assertTrue(self.run_checks(base, changed=changed)[0].startswith('RESULT:ssh:1:'))
+
+    def test_issue10_extension_preserves_other_decisions(self):
+        old = copy.deepcopy(CATALOG)
+        old['variants']['direct-kernel16'].pop('component_profiles')
+        old['variants']['direct-kernel16'].pop('component_selector_files')
+        for base, variant in old['variants'].items():
+            cases = [{}] + [p['files'] for p in variant.get('native_pairs', [])]
+            cases += [p['files'] for p in variant.get('component_profiles', [])]
+            for case in cases:
+                for mutation in ({}, {APP: 'a'*64}, {NAV: None},
+                                 {'/root/etc/init.d/S70yg': 'a'*64}):
+                    changed = dict(case); changed.update(mutation)
+                    for requested in ('ssh', 'tools', 'full'):
+                        with self.subTest(base=base, mutation=mutation, requested=requested):
+                            self.assertEqual(
+                                self.run_checks(base, changed=changed, requested=requested, catalog=old)[0],
+                                self.run_checks(base, changed=changed, requested=requested)[0])
+        # Do not extend the exception to other bases where it was not accepted.
+        script = CATALOG['variants']['direct-kernel16']['component_profiles'][0]['files']['/root/etc/init.d/S70yg']
+        for base in old['variants']:
+            if base != 'direct-kernel16':
+                changed = {'/root/etc/init.d/S70yg': script}
+                self.assertEqual(self.run_checks(base, changed=changed, catalog=old)[0],
+                                 self.run_checks(base, changed=changed)[0])
+
+    def test_issue10_selector_validation(self):
+        for value in ('bad', ['/tmp/unreviewed'], [APP],
+                      ['/root/etc/init.d/S70yg']*2, [None]):
+            catalog = copy.deepcopy(CATALOG)
+            catalog['variants']['direct-kernel16']['component_selector_files'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                installer.firmware_checks(catalog)
+        catalog = copy.deepcopy(CATALOG)
+        variant = catalog['variants']['direct-kernel16']
+        variant['component_profiles'][0]['files']['/root/etc/init.d/S70yg'] = variant['files']['/root/etc/init.d/S70yg']
+        with self.assertRaises(ValueError):
+            installer.firmware_checks(catalog)
+
+    def test_robojet_ciccia_exact_component_profile(self):
+        base='ciccia-hybrid-01b-kernel23'
+        component=CATALOG['variants'][base]['component_profiles'][0]
+        files=component['files']
+        result,output=self.run_checks(base,changed=files)
+        self.assertEqual(result,'RESULT:full:0:/usr/bin:/usr/lib:/lib')
+        self.assertIn('ciccia-robojet-issue08-kernel23',output)
+        for path in files:
+            with self.subTest(path=path):
+                changed=dict(files);changed[path]='a'*64
+                self.assertTrue(self.run_checks(base,changed=changed)[0].startswith('RESULT:ssh:1:'))
+        for path in (APP,NAV):
+            changed=dict(files);changed[path]=CATALOG['variants'][base]['files'][path]
+            self.assertTrue(self.run_checks(base,changed=changed)[0].startswith('RESULT:ssh:1:'))
+
     def test_original_bases_unchanged(self):
         for name in CATALOG['variants']:
             with self.subTest(name=name):

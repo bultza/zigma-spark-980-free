@@ -6,7 +6,9 @@ struct navigation_profile {const char *name,*sha256;uint32_t slot,base,vtable,po
 static const struct navigation_profile navigation_profiles[]={
  {"zigma","b10fc7b48d1bdb990a2c37b82f7d45fa4fd7358f428f42d58ae885aca2970255",0x444594,0x45a200,0x43b4f4,0x1120},
  {"puron","6b7b11091132e75d9787abd59a8ac4f758da3732cccf86dc5702e99bd772a5d8",0x3a5e30,0x3b6020,0x39d400,0x1120},
- {"zigma-issue04","1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664",0x4687a4,0x47e440,0x45f544,0x112c}
+ {"zigma-issue04","1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664",0x4687a4,0x47e440,0x45f544,0x112c},
+ /* Recognized map-only build: no validated passive RAM contract. */
+ {"robojet-issue08-map-only","f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c",0,0,0,0}
 };
 static inline const struct navigation_profile *navigation_profile_hash(const char *hash){
  for(size_t i=0;i<sizeof(navigation_profiles)/sizeof(*navigation_profiles);i++)if(!strcmp(hash,navigation_profiles[i].sha256))return &navigation_profiles[i];
@@ -32,6 +34,6 @@ static inline const struct navigation_profile *navigation_profile_process(int pi
 
 static const struct navigation_profile *navigation_profile_fd(int fd,const struct navigation_profile *p){
  uint32_t base=0,again=0,vt=0;
- if(p&&memory_read(fd,p->slot,&base,4)&&base==p->base&&memory_read(fd,base,&vt,4)&&vt==p->vtable&&memory_read(fd,p->slot,&again,4)&&again==base)return p;
+ if(p&&p->slot&&p->base&&p->vtable&&p->pose_offset&&memory_read(fd,p->slot,&base,4)&&base==p->base&&memory_read(fd,base,&vt,4)&&vt==p->vtable&&memory_read(fd,p->slot,&again,4)&&again==base)return p;
  return NULL;
 }

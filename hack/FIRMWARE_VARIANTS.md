@@ -52,3 +52,45 @@ The [firmware catalogue](../installer/computer/known-firmware.json) supplies the
 Native exceptions are catalogued as complete `native_pairs` inside the matching base profile. They do not extend to another layout or kernel/rootfs combination. All other required component hashes still have to match, and an unknown or unreadable native pair retains the SSH-only fallback. The installer reports the known live LiDAR limitation for Puron navigation without blocking Full. Installation does not replace either native executable or distribute vendor binaries.
 
 The [service's executable checks](../installer/robot/src/zigma-free-service) already accept both navigation hashes and both app-server hashes. The installer checks its own catalogue. Full installation and rollback on a user robot remain hardware checks; recognizing hashes does not prove every optional adapter on that combination. Live LiDAR reading from Puron navigation remains unsupported.
+
+## Issue 10: Ciccio-Issue10
+
+The 32 MiB backup matches both recorded whole-image hashes and all 512 block
+hashes. Its five-partition direct layout and U-Boot, DTB, kernel (#16), and
+SquashFS hashes match Issue 01b. The native Zigma pair and cloud/Wi-Fi binaries
+also match the `direct-kernel16` catalogue. Of its 20 checks, only `S70yg` differs:
+Issue 10 uses the existing Ciccio script (`1c7b3f64b486...`) rather than Issue
+01b's `d700033a380b...`. This identifies a firmware combination, not different
+physical hardware.
+
+The `ciccio-issue10-kernel16` component profile permits Tools and Full. Selection
+uses the exact app-server, navigation and S70yg hashes inside the kernel16 base;
+all 20 component checks remain strict, including ygclient. The original Issue
+01b profile and other bases retain their existing policies. No vendor file is
+replaced by this catalogue change. Offline installer regression tests cover the
+new combination, missing/unknown components and unchanged prior decisions.
+Installation, cold boot and operation on the owner's hardware remain unverified.
+The private original is archived as `originales/Zigma-Spark/Ciccio-Issue10`;
+Ciccio denotes its direct-layout family. The support ZIP remains unchanged.
+
+## RoboJet X-One Issue08 feature support
+
+See [RoboJet Issue08 support and limitations](ROBOJET_ISSUE08_SUPPORT.md) for the
+current map, position, geometry-control and statistics capabilities, their
+limitations and the distinction between follow-up changes and the RC15 archives.
+
+
+## Timezone check for every new variant
+
+Review login profiles, startup scripts, explicit `TZ` assignments and the
+`/etc/localtime` / `/root/etc/localtime` configuration for each new firmware.
+During authorized on-device testing, compare UTC, interactive SSH time, the web
+selection, cron's timezone, native process timezone and actual log timestamps.
+Record evidence per variant; offline review alone does not confirm runtime
+behavior. After a startup correction, verify the next authorized boot as well.
+Do not infer timezone behavior from a model name, flash layout or one binary hash.
+
+Distinguish the selected zone from the zone retained by existing processes and
+from the zone used to parse historical logs. Do not adjust UTC to compensate for
+a timezone mismatch. RoboJet's mismatch was confirmed; the checked Ciccio and
+Caccamora installations were consistent. Other variants remain unverified.

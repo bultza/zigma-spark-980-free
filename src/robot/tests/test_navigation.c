@@ -55,6 +55,9 @@ int main(void){
  snprintf(status,sizeof status,"%s/status",dir);snprintf(map,sizeof map,"%s/map",dir);snprintf(lock,sizeof lock,"%s/lock",dir);snprintf(state,sizeof state,"%s/state",dir);
  setenv("ZIGMA_STATUS_FILE",status,1);setenv("ZIGMA_MAP_FILE",map,1);setenv("ZIGMA_NAV_LOCK",lock,1);setenv("ZIGMA_STATE_FILE",state,1);
  char *text=cJSON_PrintUnformatted(m);FILE *f=fopen(map,"w");assert(f);fputs(text,f);fclose(f);free(text);
+ FILE *reduced=fopen(status,"w");assert(reduced);
+ fputs("{\"working_status\":\"Standby\",\"error\":\"NoError\",\"cache_read_at\":1000,\"local_link_received_at\":1000,\"navigation_support\":{\"memory_reads\":false},\"position\":{\"available\":true,\"x\":60,\"y\":80,\"quality\":\"recorded\"}}",reduced);fclose(reduced);
+ sends=0;assert(nav_move(20,30,false,true,30)==3&&sends==0);
  fixture_status=status;scenario=1;tick=1000;fake_sleep(0);scenario=0;sends=0;
  assert(nav_move(20,30,false,true,30)==0&&sends==2&&fan_pauses==1&&tick==1007);
  assert(sent_type==1&&strstr(first_json,"\"goto_point\":[20,30]")&&strstr(first_json,"\"FanStatus\":\"0\""));

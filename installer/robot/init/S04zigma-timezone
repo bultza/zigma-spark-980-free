@@ -1,0 +1,30 @@
+#!/bin/sh
+# Apply the selected timezone to vendor profile consumers on the next boot.
+# Rootfs is read-only: overlay only /etc/profile in RAM, preserving its contents.
+set -eu
+case "${1:-}" in start) :;; stop) exit 0;; *) exit 2;; esac
+zone=/root/etc/localtime
+ram=/tmp/zigma-timezone
+test -f "$zone" || exit 0
+test "$(head -c 4 "$zone")" = TZif
+[ ! -L "$ram" ] || exit 1
+mkdir -p "$ram"
+chmod 700 "$ram"
+if test "$ram/profile" -ef /etc/profile; then exit 0; fi
+# Do not stack over another owner's profile mount.
+if awk '$2=="/etc/profile" {found=1} END {exit !found}' /proc/mounts; then
+ echo 'Timezone: /etc/profile already mounted by another owner' >&2
+ exit 1
+fi
+test -f /etc/profile && test ! -L /etc/profile
+cat /etc/profile > "$ram/profile.new"
+cat >> "$ram/profile.new" <<'PROFILE'
+
+# zigma-selected-timezone-v1: override any vendor TZ assignment above.
+if [ -f /root/etc/localtime ]; then TZ=:/root/etc/localtime; export TZ; fi
+PROFILE
+chmod 600 "$ram/profile.new"
+mv "$ram/profile.new" "$ram/profile"
+mount -o bind "$ram/profile" /etc/profile
+test "$ram/profile" -ef /etc/profile
+readlink "$zone" > "$ram/boot-zone"

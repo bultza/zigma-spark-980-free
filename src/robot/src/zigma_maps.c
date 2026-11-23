@@ -19,9 +19,10 @@
 #define MAX_FILE (2u*1024u*1024u)
 #define MAX_MAPS 32
 #define GRID_HEADER 120u
-struct map { unsigned char *data; size_t size,grid; uint32_t id,w,h,stamp,packed; double resolution; char revision[17]; };
+struct map { unsigned char *data; size_t size,grid; uint32_t id,w,h,stamp,packed; double resolution,max_x,max_y; bool protobuf; char revision[17]; };
 static uint32_t u32(const unsigned char *p){return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
 static double f64(const unsigned char *p){uint64_t n=(uint64_t)u32(p)|((uint64_t)u32(p+4)<<32);double v;memcpy(&v,&n,8);return v;}
+#include "zigma_map_v2.h"
 static bool map_id(const char *s,uint32_t *out){
  if(!s||!*s||strlen(s)>10||(*s=='0'&&s[1]))return false;
  uint64_t n=0;for(;*s;s++){if(*s<'0'||*s>'9')return false;n=n*10+(unsigned)(*s-'0');if(n>INT32_MAX)return false;}*out=(uint32_t)n;return true;
@@ -40,11 +41,15 @@ static bool read_named_map(int dir,const char *name,uint32_t id,struct map *m){
  if(!ok)goto fail;
  unsigned char *b=m->data;
  /* Both relo 6 and 7 use the validated GRID v2 layout below. */
- if(memcmp(b,"relo",4)||(u32(b+4)!=6&&u32(b+4)!=7)||u32(b+8)!=m->size||u32(b+20)!=id)goto fail;
+ if(memcmp(b,"relo",4)||u32(b+8)!=m->size||u32(b+20)!=id)goto fail;
+ if(u32(b+4)==2){if(!map_v2(m))goto fail;goto decoded;}
+ if(u32(b+4)!=6&&u32(b+4)!=7)goto fail;
  bool found=false;for(size_t i=24;i+GRID_HEADER<=m->size;i++)if(!memcmp(b+i,"GRID",4)){m->grid=i;found=true;break;}if(!found)goto fail;
  unsigned char *g=b+m->grid;m->w=u32(g+40);m->h=u32(g+44);m->packed=u32(g+80);uint32_t aux=u32(g+84);
  if(u32(g+4)!=2||!m->w||!m->h||m->w>2048||m->h>2048||(uint64_t)m->w*m->h>1000000||u32(g+76)!=m->w*m->h||!m->packed||(uint64_t)GRID_HEADER+m->packed+aux!=u32(g+8)||(uint64_t)m->grid+GRID_HEADER+m->packed+aux>m->size)goto fail;
  m->resolution=f64(g+16);if(!isfinite(m->resolution)||m->resolution<=0||m->resolution>1)goto fail;
+ m->max_x=f64(g+24);m->max_y=f64(g+32);
+decoded:
  m->id=id;m->stamp=u32(b+12);uint64_t hash=UINT64_C(14695981039346656037);for(size_t i=0;i<m->size;i++){hash^=b[i];hash*=UINT64_C(1099511628211);}snprintf(m->revision,sizeof(m->revision),"%016"PRIx64,hash);return true;
 fail:free(m->data);memset(m,0,sizeof(*m));return false;
 }
@@ -64,7 +69,7 @@ static bool lz4(const unsigned char *src,size_t len,unsigned char *out,size_t ca
 }
 static cJSON *preview(struct map *m){
  size_t cells=(size_t)m->w*m->h;unsigned char *raw=malloc(cells*2);if(!raw)return NULL;
- if(!lz4(m->data+m->grid+GRID_HEADER,m->packed,raw,cells*2)){free(raw);return NULL;}
+ if(!(m->protobuf?v2_cells(m,raw):lz4(m->data+m->grid+GRID_HEADER,m->packed,raw,cells*2))){free(raw);return NULL;}
  /* Bound response and canvas size. Average known occupancy within each tile. */
  unsigned step=(m->w>m->h?m->w:m->h)+399;step/=400;unsigned w=(m->w+step-1)/step,h=(m->h+step-1)/step;
  char *hex=malloc((size_t)w*h*2+1);if(!hex){free(raw);return NULL;}const char digits[]="0123456789abcdef";
@@ -78,7 +83,7 @@ static cJSON *preview(struct map *m){
  /* GRID storage columns follow the native Y limit, rows the X limit.
     Keep the full-grid origin and integer sampling step: preview dimensions
     alone cannot recover the cropped control frame or the final partial tile. */
- double origin[2]={f64(m->data+m->grid+32)/m->resolution,f64(m->data+m->grid+24)/m->resolution};
+ double origin[2]={m->max_y/m->resolution,m->max_x/m->resolution};
  if(isfinite(origin[0])&&isfinite(origin[1]))cJSON_AddItemToObject(o,"grid_origin",cJSON_CreateDoubleArray(origin,2));
  cJSON_AddNumberToObject(o,"preview_step",step);
  cJSON_AddStringToObject(o,"encoding","occupancy-u8-hex");cJSON_AddStringToObject(o,"orientation","row0_top_v2");cJSON_AddStringToObject(o,"pixels",hex);cJSON_AddStringToObject(o,"source","saved_hoslam_grid");free(hex);return o;
@@ -89,6 +94,7 @@ static int compare(const void *a,const void *b){uint32_t x=*(const uint32_t*)a,y
 int main(int argc,char **argv){
  if(zigma_version_only(argc,argv,"zigma-maps-arm"))return 0;
  if(argc==3&&!strcmp(argv[1],"restore-context")){cJSON *o=restore_context(argv[2]);return o?print_json(o):lib_error("Native restore context unavailable");}
+ if(argc==4&&!strcmp(argv[1],"restore-cleanup"))return restore_cleanup(argv[2],argv[3]);
  if(argc==4&&!strcmp(argv[1],"restore-probe"))return restore_probe(argv[2],argv[3]);
  if(argc==4&&(!strcmp(argv[1],"restore-native")||!strcmp(argv[1],"restore-dry-run")))return native_restore_command(argv[2],argv[3],!strcmp(argv[1],"restore-dry-run"));
  if(argc==5&&!strcmp(argv[1],"library"))return library_command(argv[2],argv[3],argv[4]);

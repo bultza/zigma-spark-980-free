@@ -76,7 +76,7 @@ def files_for(profile, telegram=False, source_paths=None):
         add('init/S98zigma-free',ROBOT/'init/S98zigma-free')
         add('stack/activate', ROBOT/'activate.sh')
         add('init/S02zigma-storage', ROBOT/'storage.sh')
-        for name in ('S01time','S03zigma-hostname','S96ntpsync','S97crond'):
+        for name in ('S01time','S03zigma-hostname','S04zigma-timezone','S96ntpsync','S97crond'):
             add('support/'+name, ROBOT/'init'/name)
         add('support/zigma-time-sync', ROBOT/'src/zigma-time-sync')
         add('support/configure-support.sh', ROBOT/'configure-support.sh')
@@ -182,11 +182,22 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
         if not isinstance(component_profiles, list):
             raise ValueError('Invalid component profiles')
         if component_profiles:
-            lines += [' component_app_sha=$(firmware_digest ' + native_paths[0] + ') || component_app_sha=',
-                      ' component_nav_sha=$(firmware_digest ' + native_paths[1] + ') || component_nav_sha=',
-                      ' case "$component_app_sha:$component_nav_sha" in']
-            occupied = {':'.join(files[path] for path in native_paths)}
-            occupied.update(':'.join(pair['files'][path] for path in native_paths)
+            # Some reviewed builds share the native pair but differ in startup.
+            # Extra selectors stay scoped to this base; every component hash is
+            # still checked strictly after selection.
+            extra_paths = variant.get('component_selector_files', [])
+            if (not isinstance(extra_paths, list)
+                    or any(not isinstance(path, str) or path not in files
+                           or path in native_paths for path in extra_paths)
+                    or len(set(extra_paths)) != len(extra_paths)):
+                raise ValueError('Invalid component selector files')
+            component_paths = (*native_paths, *extra_paths)
+            for index, path in enumerate(component_paths):
+                lines += [f' component_sha_{index}=$(firmware_digest {path}) || component_sha_{index}=']
+            selector_vars = ':'.join(f'$component_sha_{i}' for i in range(len(component_paths)))
+            lines += [' case "' + selector_vars + '" in']
+            occupied = {':'.join(files[path] for path in component_paths)}
+            occupied.update(':'.join({**files, **pair['files']}[path] for path in component_paths)
                             for pair in variant.get('native_pairs', []))
             component_names = set(catalog['variants'])
             for component in component_profiles:
@@ -211,7 +222,7 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
                         or any(cf[path] != files[path] for path in ('/dev/mtd1', '/dev/mtd2', '/dev/mtd3'))
                         or not isinstance(note, str) or not note or any(ord(ch) < 32 for ch in note)):
                     raise ValueError('Invalid component profile')
-                cs = ':'.join(cf[path] for path in native_paths)
+                cs = ':'.join(cf[path] for path in component_paths)
                 if cs in occupied:
                     raise ValueError('Duplicate component profile selector')
                 occupied.add(cs); component_names.add(cn)
