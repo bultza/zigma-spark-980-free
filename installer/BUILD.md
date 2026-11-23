@@ -304,9 +304,15 @@ Staging this change does not restart native services or adjust UTC/RTC time.
 It applies on the next boot; the current native processes may still use their
 previous TZ, and changing the zone later does not guarantee that all running
 vendor processes reload it. Historical log timestamps are not rewritten.
-Existing binary/web-only upgrades do not install these startup adaptations;
-existing robots require a targeted, backed-up startup update. Existing release
-archives have not been regenerated.
+RC17 upgrades include a targeted migration of these two startup files. The existing
+transaction retains old bytes and permissions, permits an absent S04 hook, checks
+shell syntax before any write, and restores old content/removes a newly created
+hook on rollback. The native script is read before planning and rechecked during
+backup and remote preflight. An existing unknown S04 script or malformed/duplicate
+navigation preamble is refused. Firmware checks strip only the exact managed
+preamble before comparing the vendor script hash, so subsequent upgrades still
+recognize the original firmware without accepting unrelated changes.
+The regenerated RC17 includes this migration; no automatic reboot is performed.
 
 Validation: `python3 -m unittest discover -s installer/tests -p test_boot_timezone.py`
 checks profile precedence, preserved settings, winter/summer offsets, unchanged

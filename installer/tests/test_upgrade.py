@@ -147,7 +147,7 @@ class UpgradeFlow(unittest.TestCase):
             for target, value in [
                 ('select_connection', ('192.0.2.1', home/'key', Mock())),
                 ('load_key', Mock()), ('connect', MagicMock()), ('upload', None),
-                ('idle', None), ('firmware_gate', 'true'),
+                ('idle', None), ('firmware_gate', 'true'), ('timezone_payload', ({}, {})),
                 ('read_file', (b'old', '600')),
                 ('read_bytes', json.dumps(inventory).encode()),
                 ('payload', {'/root/zigma-free/src/app.js': (b'new', 0o644)}),
@@ -214,6 +214,68 @@ class Transaction(unittest.TestCase):
             if process.poll() is not None: break
             time.sleep(.02)
         self.fail((self.stage/'log').read_text())
+
+    def timezone_files(self, existing=False):
+        init = self.root/'root/etc/init.d'; init.mkdir(parents=True)
+        self.nav = init/'S51hoslam'
+        self.nav_before = b'#!/bin/sh\nexport HOSLAM_LASER_ANGLE=-2.386655\nexit 0\n'
+        self.nav.write_bytes(self.nav_before); self.nav.chmod(0o750)
+        self.tz = init/'S04zigma-timezone'
+        tz_data = b'#!/bin/sh\nexit 0\n'
+        rows = []
+        for index, path, old, new, mode in [
+            (0, self.tz, b'#!/bin/sh\n# previous\n' if existing else None, tz_data, '700'),
+            (1, self.nav, self.nav_before, upgrade.navigation_timezone(self.nav_before), '750')]:
+            if old is not None:
+                path.write_bytes(old); path.chmod(int(mode, 8))
+                (self.stage/f'{index}.old.gz').write_bytes(gzip.compress(old))
+            else:
+                (self.stage/f'{index}.old.gz').unlink(missing_ok=True)
+            (self.stage/f'{index}.new.gz').write_bytes(gzip.compress(new))
+            oldsha = hashlib.sha256(old).hexdigest() if old is not None else 'absent'
+            rows.append(f'{index} {path} {mode if old is not None else "-"} {mode} {oldsha} {hashlib.sha256(new).hexdigest()}')
+        (self.stage/'files.list').write_text('\n'.join(rows)+'\n')
+
+    def test_timezone_accept_without_running_scripts(self):
+        self.timezone_files()
+        process = self.start(); self.ready(process)
+        subprocess.run(['sh', str(self.script), str(self.stage), 'accept'], check=True)
+        self.assertEqual(process.wait(timeout=5), 0)
+        self.assertTrue(self.tz.is_file())
+        self.assertEqual(self.nav.read_bytes(), upgrade.navigation_timezone(self.nav_before))
+        self.assertEqual(self.nav.stat().st_mode & 0o777, 0o750)
+
+    def test_timezone_disconnect_rolls_back_both_paths(self):
+        self.timezone_files()
+        self.start().wait(timeout=6)
+        self.assertFalse(self.tz.exists())
+        self.assertEqual(self.nav.read_bytes(), self.nav_before)
+        self.assertEqual(self.nav.stat().st_mode & 0o777, 0o750)
+        self.assertEqual((self.stage/'state').read_text().strip(), 'rolled-back')
+
+    def test_timezone_existing_file_rollback(self):
+        self.timezone_files(existing=True)
+        process = self.start(); self.ready(process)
+        (self.stage/'rollback.now').touch(); process.wait(timeout=5)
+        self.assertEqual(self.tz.read_bytes(), b'#!/bin/sh\n# previous\n')
+        self.assertEqual(self.nav.read_bytes(), self.nav_before)
+
+    def test_timezone_partial_install_failure_rolls_back(self):
+        self.timezone_files()
+        service = self.base/'zigma-free-service'; marker = self.stage/'failed-once'
+        service.write_text(f'#!/bin/sh\nif test ! -e "{marker}"; then touch "{marker}"; exit 1; fi\nexit 0\n')
+        self.start().wait(timeout=5)
+        self.assertFalse(self.tz.exists())
+        self.assertEqual(self.nav.read_bytes(), self.nav_before)
+        self.assertEqual((self.stage/'state').read_text().strip(), 'rolled-back')
+
+    def test_timezone_external_edit_is_not_overwritten_on_rollback(self):
+        self.timezone_files()
+        process = self.start(); self.ready(process)
+        self.nav.write_bytes(b'#!/bin/sh\n# external edit\n')
+        (self.stage/'rollback.now').touch(); process.wait(timeout=5)
+        self.assertEqual(self.nav.read_bytes(), b'#!/bin/sh\n# external edit\n')
+        self.assertEqual((self.stage/'state').read_text().strip(), 'rollback-failed')
 
     def test_legacy_install_without_directory(self):
         directory = self.root/'root/.zigma-install'

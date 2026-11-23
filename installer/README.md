@@ -44,8 +44,17 @@ is fine. It needs neither pairing nor a download server. Keep the robot idle and
 powered throughout. The assistant checks firmware, saves and verifies copies of
 replaced files in a new private `~/Zigma/upgrade-*` session, and updates compiled
 components and web assets. It retains the original session, private key, maps,
-settings, tokens, boot scripts and factory firmware. This is a binary/web update,
-not a migration of boot scripts from older installations.
+settings, tokens and factory firmware. RC17 also migrates the boot timezone:
+it installs `S04zigma-timezone` and adds the selected-zone preamble to `S51hoslam`,
+preserving its launch commands, calibrations and permissions. These two files use
+the same verified PC backups and rollback transaction as the binary/web update.
+If the boot hook was absent, rollback removes the newly added copy. Unknown edits
+or concurrent changes are refused. Repeating the migration does not duplicate it.
+
+The migration does not run the boot scripts, restart native applications, change
+UTC time or shift scheduled jobs. Keep the desired timezone selected in the web;
+the correction takes full effect after your next normal robot reboot. The updater
+does not reboot the robot automatically.
 
 Changed managed processes restart and the assistant checks their health and
 component hashes. If verification fails or the PC disconnects, the robot restores

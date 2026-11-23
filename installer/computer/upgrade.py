@@ -1,4 +1,4 @@
-"""SSH-only binary/web upgrades, with independent rollback and private PC backups."""
+"""SSH-only binary/web and boot-timezone upgrades, with independent rollback and private PC backups."""
 import base64
 import datetime
 import getpass
@@ -24,6 +24,35 @@ BINARY_NAMES = ('free-zigma-agent-arm', 'zigma-observe-arm', 'zigma-core-arm',
                 'zigma-network-arm', 'zigma-area-arm', 'zigma-zones-arm',
                 'zigma-maps-arm', 'zigma-options-arm', 'zigma-curl-arm', 'zigmactl')
 WEB_NAMES = ('app.js', 'index.html', 'style.css', 'nor.js', 'favicon.svg')
+
+
+TIMEZONE_INIT = '/root/etc/init.d/S04zigma-timezone'
+NAV_INIT = '/root/etc/init.d/S51hoslam'
+TIMEZONE_MARKER = b'# zigma-selected-timezone-v1'
+TIMEZONE_BLOCK = (TIMEZONE_MARKER + b'\n'
+                  b'if [ -f /root/etc/localtime ]; then TZ=:/root/etc/localtime; export TZ; fi\n')
+
+
+def navigation_timezone(data):
+    """Preserve every vendor byte except the reviewed post-shebang insertion."""
+    if not data.startswith(b'#!/bin/sh\n'):
+        raise ValueError('Unsupported navigation startup script')
+    body = data[len(b'#!/bin/sh\n'):]
+    if body.startswith(TIMEZONE_BLOCK):
+        if TIMEZONE_MARKER in body[len(TIMEZONE_BLOCK):]:
+            raise ValueError('Duplicate navigation timezone marker')
+        return data
+    if TIMEZONE_MARKER in body:
+        raise ValueError('Unrecognized navigation timezone edit')
+    return b'#!/bin/sh\n' + TIMEZONE_BLOCK + body
+
+
+def timezone_payload(robot):
+    # read_file rejects links; the transaction rechecks these bytes before writing.
+    data, mode = read_file(robot, NAV_INIT)
+    boot = (installer.ROBOT/'init/S04zigma-timezone').read_bytes()
+    return {TIMEZONE_INIT: (boot, 0o700),
+            NAV_INIT: (navigation_timezone(data), int(mode, 8))}, {NAV_INIT: data}
 
 
 def saved_connection(session):
@@ -156,7 +185,23 @@ def firmware_gate():
  /root/etc/init.d/S99daemon) set -- /root/zigma-free/vendor-init/S99daemon;;
  esac
  value=$(sha256sum "$1"''')
+    # Strip only our exact preamble for the vendor digest/calibration checks.
+    checks = checks.replace('value=$(sha256sum "$1"',
+                            'value=$(upgrade_firmware_bytes "$1" | sha256sum')
+    checks = checks.replace("value=$(sed ", 'value=$(upgrade_navigation_original "$1" | sed ')
+    checks = checks.replace("' \"$1\" | sha256sum)", "' | sha256sum)")
     return '''set -eu
+upgrade_navigation_original() {
+ test -f "$1" && test ! -L "$1" || return 1
+ if test "$(sed -n '2p' "$1")" = '# zigma-selected-timezone-v1'; then
+  test "$(sed -n '3p' "$1")" = 'if [ -f /root/etc/localtime ]; then TZ=:/root/etc/localtime; export TZ; fi' || return 1
+  head -n 1 "$1"
+  tail -n +4 "$1"
+ else cat "$1"; fi
+}
+upgrade_firmware_bytes() {
+ case "$1" in /root/etc/init.d/S51hoslam) upgrade_navigation_original "$1";; *) cat "$1";; esac
+}
 profile=full
 requested_profile=full
 layout=$(awk 'NR>1 {gsub(/"/,"",$4); printf "%s:%s;",$4,$2}' /proc/mtd)
@@ -214,12 +259,14 @@ def upgrade(session=None):
                   'test ! -e /root/.zigma-install/pending && test ! -e '+BASE+'/activation/pending-boot')
     (directory/'connection.txt').write_text(f'SSH: root@{host}\nPrivate key: {key_path}\nWeb: http://{host}:8765\n')
     print('Upgrade session: '+str(directory)+'. Original session and private key are preserved.')
+    timezone_files, timezone_originals = timezone_payload(robot)
     robot.command('sh -s', timeout=90, diagnostic='upgrade-firmware', script=firmware_gate())
     idle(robot)
     robot.command(BASE+'/zigma-free-service status && /root/bin/zigmactl check-control')
     boot = robot.command('cat /proc/sys/kernel/random/boot_id')
     old = json.loads(read_bytes(robot, 'cat '+BASE+'/release.json'))
     files = payload(old)
+    files.update(timezone_files)
     backups, listing, changed = {}, [], {}
     # Keep only changed files; old bytes and permissions are verified again before replacement.
     for path, (data, mode) in files.items():
@@ -228,11 +275,15 @@ def upgrade(session=None):
                                  'elif test ! -e '+q+'; then echo absent; else exit 1; fi; }')
         index = str(len(listing))
         if presence == 'absent':
-            if path not in {BASE+'/src/'+name for name in WEB_NAMES}:
+            if path not in {BASE+'/src/'+name for name in WEB_NAMES} | {TIMEZONE_INIT}:
                 raise ValueError('Required installed component is missing: '+path)
             previous_mode, previous_sha = '-', 'absent'
         elif presence == 'present':
             before, previous_mode = read_file(robot, path)
+            if path in timezone_originals and before != timezone_originals[path]:
+                raise ValueError('Navigation startup changed during upgrade preparation')
+            if path == TIMEZONE_INIT and before != data:
+                raise ValueError('Unrecognized existing timezone boot script')
             if before == data:
                 continue
             previous_sha = installer.digest(before)
@@ -244,7 +295,7 @@ def upgrade(session=None):
         changed[index] = gzip.compress(data, mtime=0)
         listing.append(f'{index} {path} {previous_mode} {mode:o} {previous_sha} {installer.digest(data)}')
     if not listing:
-        print('All binaries and web assets already match this package. No robot files changed.')
+        print('All binaries, web assets and boot timezone files already match this package. No robot files changed.')
         return
     manifest = '\n'.join(listing)+'\n'
     (directory/'files.list').write_text(manifest)
@@ -294,6 +345,7 @@ def upgrade(session=None):
                     continue
                 (directory/'verified.json').write_text(json.dumps({'host': host, 'boot': boot, 'files': listing}, indent=2)+'\n')
                 print('Upgrade verified. Backups retained: '+str(directory))
+                print('Boot timezone correction is installed. It takes full effect after the next robot reboot; no reboot was requested.')
                 return
             if state == 'ready':
                 try:
@@ -316,6 +368,7 @@ def upgrade(session=None):
                         raise RuntimeError('Acceptance completion not confirmed')
                     (directory/'verified.json').write_text(json.dumps({'host': host, 'boot': boot, 'files': listing}, indent=2)+'\n')
                     print('Upgrade verified. Backups retained: '+str(directory))
+                    print('Boot timezone correction is installed. It takes full effect after the next robot reboot; no reboot was requested.')
                     return
                 except (paramiko.AuthenticationException, paramiko.BadHostKeyException):
                     raise

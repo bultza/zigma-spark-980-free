@@ -70,7 +70,8 @@ completion; keep protected backups and do not automatically repeat an uncertain
 operation. The conversion is a private test artifact, not a supported cross-model
 map converter. See [native map import and validation](hack/ROBOJET_MAP_IMPORT.md).
 
-RC16 also applies the web-selected timezone to native processes at the next boot.
+RC17 also migrates existing installations to apply the web-selected timezone at
+the next boot, with verified backups and rollback of the two startup files.
 Already-running processes can retain their previous timezone until then. Every new
 firmware variant must be audited for timezone overrides; the RoboJet override must
 not be assumed to exist on other variants.

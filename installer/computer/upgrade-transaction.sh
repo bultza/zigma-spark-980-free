@@ -1,5 +1,5 @@
 #!/bin/sh
-# Detached bounded upgrade. PC backups are retained; no vendor or user data writes.
+# Detached bounded upgrade with boot-timezone migration and verified PC backups.
 set -eu
 umask 077
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/root/bin
@@ -20,12 +20,12 @@ identity() {
 }
 checkpath() {
  case "$path" in
- /root/bin/zigmactl|/root/zigma-free/*) :;; *) return 1;; esac
+ /root/bin/zigmactl|/root/zigma-free/*|/root/etc/init.d/S04zigma-timezone|/root/etc/init.d/S51hoslam) :;; *) return 1;; esac
  case "$path" in *..*|*[!a-zA-Z0-9/._-]*) return 1;; esac
  test ! -L "$path" || return 1
  if test "$oldsha" = absent; then
   case "$path" in
-   "$base/src/app.js"|"$base/src/index.html"|"$base/src/style.css"|"$base/src/nor.js"|"$base/src/favicon.svg") :;;
+   "$base/src/app.js"|"$base/src/index.html"|"$base/src/style.css"|"$base/src/nor.js"|"$base/src/favicon.svg"|/root/etc/init.d/S04zigma-timezone) :;;
    *) return 1;;
   esac
   test ! -e "$path" || test -f "$path" || return 1
@@ -121,6 +121,12 @@ case "$action" in
     test "$(gzip -dc "$stage/$index.old.gz" | sha256sum | cut -d ' ' -f1)" = "$oldsha"
    fi
    test "$(gzip -dc "$stage/$index.new.gz" | sha256sum | cut -d ' ' -f1)" = "$newsha"
+   case "$path" in
+    /root/etc/init.d/S04zigma-timezone|/root/etc/init.d/S51hoslam)
+     gzip -dc "$stage/$index.new.gz" > "$stage/timezone-syntax.sh"
+     sh -n "$stage/timezone-syntax.sh"
+     rm "$stage/timezone-syntax.sh";;
+   esac
   done < "$stage/files.list"
   echo installing > "$stage/state"
   if ! replace_files new; then rollback; exit 1; fi
