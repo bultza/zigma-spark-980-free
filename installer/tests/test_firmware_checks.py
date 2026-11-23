@@ -64,7 +64,9 @@ class FirmwareChecks(unittest.TestCase):
 
     def test_issue10_extension_preserves_other_decisions(self):
         old = copy.deepcopy(CATALOG)
-        old['variants']['direct-kernel16'].pop('component_profiles')
+        old['variants']['direct-kernel16']['component_profiles'] = [
+            p for p in old['variants']['direct-kernel16']['component_profiles']
+            if p['name'] != 'ciccio-issue10-kernel16']
         old['variants']['direct-kernel16'].pop('component_selector_files')
         for base, variant in old['variants'].items():
             cases = [{}] + [p['files'] for p in variant.get('native_pairs', [])]
@@ -98,6 +100,41 @@ class FirmwareChecks(unittest.TestCase):
         variant['component_profiles'][0]['files']['/root/etc/init.d/S70yg'] = variant['files']['/root/etc/init.d/S70yg']
         with self.assertRaises(ValueError):
             installer.firmware_checks(catalog)
+
+    def test_robojet_original_exact_components(self):
+        base = 'direct-kernel16'
+        cp = next(p for p in CATALOG['variants'][base]['component_profiles']
+                  if p['name'] == 'robojet-issue08-kernel16')
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(base, changed=cp['files'], requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/usr/bin:/usr/lib:/lib')
+            self.assertIn('Firmware recognized: robojet-issue08-kernel16', output)
+        for path in cp['files']:
+            for value in (None, 'a'*64):
+                changed = dict(cp['files']); changed[path] = value
+                with self.subTest(path=path, value=value):
+                    self.assertTrue(self.run_checks(base, changed=changed)[0].startswith('RESULT:ssh:1:'))
+        adapted = CATALOG['variants']['ciccia-hybrid-01b-kernel23']['component_profiles'][0]['files']
+        for path in ('/root/modules/8189fs.ko', '/root/etc/init.d/S51hoslam', APP, NAV):
+            changed = dict(cp['files'])
+            changed[path] = adapted[path] if path not in (APP, NAV) else CATALOG['variants'][base]['files'][path]
+            with self.subTest(mixed_component=path):
+                self.assertTrue(self.run_checks(base, changed=changed)[0].startswith('RESULT:ssh:1:'))
+
+    def test_robojet_original_preserves_existing_profiles(self):
+        old = copy.deepcopy(CATALOG)
+        old['variants']['direct-kernel16']['component_profiles'] = [
+            p for p in old['variants']['direct-kernel16']['component_profiles']
+            if p['name'] != 'robojet-issue08-kernel16']
+        for base, variant in old['variants'].items():
+            cases = [{}] + [p['files'] for p in variant.get('native_pairs', [])]
+            cases += [p['files'] for p in variant.get('component_profiles', [])]
+            for case in cases:
+                for mutation in ({}, {APP: 'a'*64}, {NAV: None}):
+                    changed = dict(case); changed.update(mutation)
+                    with self.subTest(base=base, mutation=mutation):
+                        self.assertEqual(self.run_checks(base, changed=changed, catalog=old)[0],
+                                         self.run_checks(base, changed=changed)[0])
 
     def test_robojet_ciccia_exact_component_profile(self):
         base='ciccia-hybrid-01b-kernel23'

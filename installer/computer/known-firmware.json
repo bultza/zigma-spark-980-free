@@ -193,6 +193,35 @@
             "/root/etc/udhcpc.script": "7f9428aae1e5f35592b21e418c3d366cc91c7c6e58e07a02771d929f1a0f8a7a"
           },
           "note": "Issue10 Zigma native pair on the direct kernel16 base with the reviewed Ciccio S70yg startup script. Full enabled at owner request; original hardware installation and cold boot remain unverified."
+        },
+        {
+          "name": "robojet-issue08-kernel16",
+          "files": {
+            "/dev/mtd1": "c8189701d5e4959d7f2c2e812e655d998cf06dd6988112e7483fdd8636ec82c4",
+            "/dev/mtd2": "0c34365f28425204029bd194d4797b703814ec4fe50125a764ff09f6a10b3d41",
+            "/dev/mtd3": "4034127dee238bc823c90b6a5afb5ee66f3efed64cd8d9130019d23b1ec872a3",
+            "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+            "/bin/busybox": "1e81aa78ca0fd0bb74133c35f8b3c033d858d0fb362b78b5f3984970599a0e27",
+            "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+            "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+            "/root/yg/ygclient": "cac314d837606282d9afc012fde31b89ea9a58cf5370420da0e984059ff78615",
+            "/root/app_server/daemon": "4e14e5402705225964c977ce3b93b3fed0f0dcaab50f07767dc66cb468897177",
+            "/root/app_server/wifi_app_server_grit": "8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c",
+            "/root/hoslam/demo_rplidar": "f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c",
+            "/root/modules/8189fs.ko": "1b20e5720dba89ae0d29f06c5af8ae39ee5e2205ef72039c5ec4f9149c490ecc",
+            "/root/bin/hold380": "eec3bbb4eb729d4f15e2dd2003c3d69882d080099035811f1223ebf4db71ec99",
+            "/root/etc/init.d/S70yg": "15b68c8417f990841af60b0da6a4b78e07ec572127816568b97b06fa9e60ff1a",
+            "/root/etc/init.d/S99daemon": "c498883ebe9899479c2117f7594d3e11fcb07bf872d59dad5d40f7f7adc9795e",
+            "/usr/bin/wpa_supplicant": "471adf407c968deb82eeb5a759644df597e34a8d9541637ede56c420b3fc5a1b",
+            "/usr/bin/wpa_cli": "a938d8b857711cb94ce1fcf03d2560e0cc30ab2114df8b07764c40329d18291b",
+            "/usr/bin/hostapd": "17f9aa7ba04653d10026b815a3ee97bb407cae9ca2ee5d542bc975b86848174f",
+            "/usr/lib/libnl.so.1": "5286469bf4c3720c1126c2b54f6a0f2e648b7dc738ef91fffeb1edae488ad08f",
+            "/root/etc/udhcpc.script": "7f9428aae1e5f35592b21e418c3d366cc91c7c6e58e07a02771d929f1a0f8a7a",
+            "/root/etc/init.d/S50app": "d1cb4da37406e17ca3f5bc67c97bac1ba146efe8007e2955521c36da811a0547",
+            "/root/etc/init.d/S51hoslam": "8ee10e6812bebacfa77531b4a56adaef8d6e86f4dded5c774dc9323bf3e27341",
+            "/root/etc/init.d/S60wifi": "5cf0aa6cceea02072b2c14884391372868c220caa230ecfb911455aa051d5af5"
+          },
+          "note": "RC17 original RoboJet Issue08 kernel16 profile, verified against the received NOR. Full enabled with RoboJet app cache, v2 maps and general no-go support; original-hardware installation and cold boot remain unverified."
         }
       ]
     },

@@ -40,6 +40,11 @@ hardware installation and cold boot still need owner validation. Unknown or mixe
 components retain the installer fallback rather than inheriting another profile's
 permissions. See [firmware variants](hack/FIRMWARE_VARIANTS.md).
 
+RC17 recognizes both the original Issue08 RoboJet (kernel #16) and its Ciccia
+adaptation (kernel #23), using separate exact component profiles. The original
+profile was checked against the received NOR; installation and cold boot on the
+original hardware still require owner validation. Issue10 support is preserved.
+
 RoboJet uses a different app-cache layout and `relo` v2 saved maps. RC16 includes
 the bounded v2 decoder, byte-preserving protected copies, map-derived robot
 coordinates, general no-go polygon editing, area commands, and area/time statistics

@@ -48,6 +48,15 @@ configuration, missing coordinates, unsupported restriction types and changed
 map/base snapshots are rejected rather than guessed. Command dispatch and
 configuration readback are distinct from physical navigation validation.
 
+## Installer profiles
+
+RC17 includes both `robojet-issue08-kernel16` (original Issue08) and
+`ciccia-robojet-issue08-kernel23` (adapted for Ciccia). The original profile's
+23 hashes were derived from the received NOR. DTB, kernel, Wi-Fi module and
+navigation calibration script differ between the two profiles. Installation
+preserves the device's files and calibrations; profile recognition does not
+replace them. Original-hardware installation and cold boot remain unverified.
+
 ## Version scope
 
 The current implementation uses agent V1.35, observer V1.22, maps V1.17,
