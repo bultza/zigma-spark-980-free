@@ -38,6 +38,26 @@ static int ctl_status(bool json) {
   if(i==0&&valid)valid=v->valuedouble<=100;
   if(valid)cJSON_AddNumberToObject(out,numbers[i],v->valuedouble);else cJSON_AddNullToObject(out,numbers[i]);
  }
+ cJSON *fan=cJSON_CreateObject(),*input_fan=cJSON_GetObjectItemCaseSensitive(in,"fan");
+ cJSON *level=cJSON_GetObjectItemCaseSensitive(input_fan,"level"),*percent=cJSON_GetObjectItemCaseSensitive(input_fan,"percent");
+ bool valid_level=cJSON_IsNumber(level)&&level->valuedouble>=1&&level->valuedouble<=3&&floor(level->valuedouble)==level->valuedouble;
+ const char *fan_names[]={"unknown","minimum","medium","maximum"};
+ if(valid_level)cJSON_AddNumberToObject(fan,"level",level->valuedouble);else cJSON_AddNullToObject(fan,"level");
+ cJSON_AddStringToObject(fan,"name",fan_names[valid_level?level->valueint:0]);
+ if(cJSON_IsNumber(percent)&&isfinite(percent->valuedouble)&&percent->valuedouble>=0&&percent->valuedouble<=100)cJSON_AddNumberToObject(fan,"percent",percent->valuedouble);else cJSON_AddNullToObject(fan,"percent");
+ /* Preserve the selected power separately from the state-based estimate. */
+ cJSON_AddItemToObject(out,"fan_setting",cJSON_Duplicate(fan,1));
+ const char *state=ns(out,"working_status");
+ bool fan_mode=!strcmp(state,"AutoClean")||!strcmp(state,"SpotClean")||!strcmp(state,"PlanningRect")||!strcmp(state,"SelectClean")||!strcmp(state,"DirectionControl");
+ bool known_state=available&&strcmp(state,"unknown")&&state[0];
+ if(!fan_mode){
+  cJSON_ReplaceItemInObjectCaseSensitive(fan,"level",known_state?cJSON_CreateNumber(0):cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(fan,"percent",known_state?cJSON_CreateNumber(0):cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(fan,"name",cJSON_CreateString(known_state?"off":"unknown"));
+ }
+ cJSON_AddStringToObject(fan,"source","state_estimate");
+ cJSON_AddBoolToObject(fan,"estimated",true);
+ cJSON_AddItemToObject(out,"fan",fan);
  struct timespec now;clock_gettime(CLOCK_REALTIME,&now);
  double epoch=now.tv_sec+now.tv_nsec/1e9;
  cJSON *stamp=cJSON_GetObjectItemCaseSensitive(out,"observed_at");
@@ -61,6 +81,10 @@ static int ctl_status(bool json) {
   printf("State: %s\n",cJSON_GetObjectItemCaseSensitive(out,"working_status")->valuestring);
   cJSON *battery=cJSON_GetObjectItemCaseSensitive(out,"battery_level");
   if(cJSON_IsNumber(battery))printf("Battery: %.0f%%\n",battery->valuedouble);else puts("Battery: unknown");
+  printf("Fan: %s",ns(fan,"name"));
+  if(cJSON_IsNumber(nv(fan,"level")))printf(" (level %.0f/3)",nn(fan,"level"));
+  if(cJSON_IsNumber(nv(fan,"percent")))printf(" · %.0f%%",nn(fan,"percent"));
+  puts(" (estimated from state)");
   printf("Error: %s\nTelemetry: %s\n",cJSON_GetObjectItemCaseSensitive(out,"error")->valuestring,quality);
   if(ts>0&&age>=0)printf("Last observation: %.0f seconds ago\n",floor(age));
   cJSON *duration=nv(out,"clean_time_s"),*area=nv(out,"clean_area_m2");

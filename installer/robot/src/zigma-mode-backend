@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-mode-backend V1.2 (packaged 2026-11-07T17:42:26+00:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-mode-backend V1.3 (packaged 2026-11-07T17:42:26+00:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Robot operations for the selector coordinator. No reboot or motion commands.
@@ -73,6 +73,39 @@ stop_identity() {
   fi
   rm -f "$file"
  fi
+}
+# Only the native pairing server is eligible for handover. A different DHCP
+# server, config, interface or multiple instances must remain untouched.
+pairing_dhcp_validate() {
+ pairing_dhcp_pid=$(pidof udhcpd || true)
+ set -- $pairing_dhcp_pid
+ [ "$#" -le 1 ] || return 1
+ [ "$#" -ne 0 ] || return 0
+ verify "$pairing_dhcp_pid" /usr/sbin/udhcpd || return 1
+ pairing_dhcp_args=$(tr '\000' '\n' < "/proc/$pairing_dhcp_pid/cmdline") || return 1
+ case "$pairing_dhcp_args" in
+  "$(printf 'udhcpd\n-f\n/tmp/udhcpd.conf')"|"$(printf '/usr/sbin/udhcpd\n-f\n/tmp/udhcpd.conf')") :;;
+  *) return 1;;
+ esac
+ [ -f /tmp/udhcpd.conf ] && [ ! -L /tmp/udhcpd.conf ] || return 1
+ awk '
+  { sub(/#.*/, "") }
+  $1 == "interface" { count++; if (NF != 2 || $2 != "wlan0") bad=1 }
+  END { exit !(count == 1 && !bad) }
+ ' /tmp/udhcpd.conf || return 1
+}
+pairing_dhcp_stop() {
+ # Recheck the complete ownership evidence after stopping the native spawners.
+ pairing_dhcp_validate || return 1
+ [ -n "$pairing_dhcp_pid" ] || return 0
+ pairing_dhcp_original=$pairing_dhcp_pid
+ pairing_dhcp_tick=$(start "$pairing_dhcp_pid") || return 1
+ pairing_dhcp_validate || return 1
+ [ -n "$pairing_dhcp_pid" ] || return 0
+ [ "$pairing_dhcp_pid" = "$pairing_dhcp_original" ] || return 1
+ stop_exact "$pairing_dhcp_pid" /usr/sbin/udhcpd "$pairing_dhcp_tick" || return 1
+ # A replacement server is not ours to kill. Fail rather than claim readiness.
+ [ -z "$(pidof udhcpd || true)" ]
 }
 start_trial_observer() {
  # Optional staged single-publisher handover, enabled only with captured original
@@ -165,6 +198,7 @@ case "$action" in
   single ygclient /root/yg/ygclient
   single wpa_supplicant "$firmware_wifi_bin/wpa_supplicant"
   single udhcpc /bin/busybox
+  pairing_dhcp_validate
   if [ -n "$(pidof ygclient daemon || true)" ];then
    [ -n "$(pidof wifi_app_server_grit || true)" ]
    [ -n "$(pidof demo_rplidar || true)" ]
@@ -175,6 +209,7 @@ case "$action" in
   stop_named ygclient /root/yg/ygclient
   stop_named udhcpc /bin/busybox
   stop_named wpa_supplicant "$firmware_wifi_bin/wpa_supplicant"
+  pairing_dhcp_stop
   start_trial_observer
   ;;
  recover)

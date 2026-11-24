@@ -39,6 +39,7 @@ static bool cached_puron_status(cJSON *status,int fd){
  char message[40];snprintf(message,sizeof message,"VendorError%d",error);
  replace_value(status,"error",cJSON_CreateString(error?message:"NoError"));
  replace_value(status,"vendor_state_code",cJSON_CreateNumber(code));
+ status_fan(status,a[1],-1);
  replace_value(status,"battery_level",cJSON_CreateNumber(battery));
  replace_value(status,"vendor_error_code",cJSON_CreateNumber(error));
  replace_value(status,"vendor_clean_area_raw",cJSON_CreateNumber(a[9]));

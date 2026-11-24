@@ -156,15 +156,20 @@ int main(int argc, char **argv)
     if(argc>=2&&!strcmp(argv[1],"setheadingblock")){
         fprintf(stderr,"Absolute heading control is not verified; no movement sent\n");return 7;
     }
-    if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[1], "clean") && strcmp(argv[1], "resume"))) {
+    if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[1], "clean") && strcmp(argv[1], "resume") && strcmp(argv[1], "setfan"))) {
         fprintf(stderr,
-                "Usage: %s {status [--json]|check-control|clean [1-3]|resume [1-3]|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
+                "Usage: %s {status [--json]|check-control|clean [1-3]|resume [1-3]|setfan 1-3|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
                 argv[0]);
         return 1;
     }
 
     if (!strcmp(argv[1], "clean") ||
-        !strcmp(argv[1], "resume")) {
+        !strcmp(argv[1], "resume") || !strcmp(argv[1], "setfan")) {
+        const int fan_only = !strcmp(argv[1], "setfan");
+        if (fan_only && argc != 3) {
+            fprintf(stderr, "Usage: zigmactl setfan {1|2|3}\n");
+            return 1;
+        }
         /* Native fan table: Quiet=2, Normal=0, Strong=1. */
         static const unsigned char fan[] = {2, 0, 1};
         int level = 3;
@@ -176,7 +181,17 @@ int main(int argc, char **argv)
             level = argv[2][0] - '0';
         }
         if (send_command(0x02, 0x24, fan[level - 1])) return 1;
-        return send_command(0x02, 0x22, 0x02);
+        if (fan_only) return 0;
+        if (send_command(0x02, 0x22, 0x02)) return 1;
+        /* Some controllers ignore a fan selection made before cleaning.
+         * Repeat only the selected power after start; never repeat start. */
+        struct timespec delay = {0, 500000000L};
+        while (nanosleep(&delay, &delay) < 0) {
+            if (errno == EINTR) continue;
+            perror("fan delay");
+            return 1;
+        }
+        return send_command(0x02, 0x24, fan[level - 1]);
     }
 
     if (!strcmp(argv[1], "pause"))

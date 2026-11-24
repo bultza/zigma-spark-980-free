@@ -45,6 +45,34 @@ class Status(unittest.TestCase):
         self.assertIn('Battery: 95%',s)
         self.assertIn('State: PileCharging',s)
 
+    def test_fan(self):
+        for level,name in [(1,'minimum'),(2,'medium'),(3,'maximum')]:
+            value=dict(working_status='AutoClean',fan=dict(level=level,percent=50))
+            _,result=self.run_status(value)
+            self.assertEqual(result['fan'],dict(level=level,name=name,percent=50,source='state_estimate',estimated=True))
+            _,text=self.run_status(value,True)
+            self.assertIn('Fan: '+name,text)
+            self.assertIn('50%',text)
+        for fan in [None,{},dict(level=4,percent=101),dict(level=1.5,percent=-1)]:
+            _,result=self.run_status(dict(working_status='AutoClean',fan=fan))
+            self.assertIsNone(result['fan']['level'])
+            self.assertIsNone(result['fan']['percent'])
+
+    def test_fan_state_estimate(self):
+        for state in ['PileCharging','DirCharging','BackCharging','Standby','Hibernating','CleanDone','Malfunction','PlanningLocation']:
+            _,result=self.run_status(dict(working_status=state,fan=dict(level=1,percent=20)))
+            self.assertEqual(result['fan']['level'],0)
+            self.assertEqual(result['fan']['percent'],0)
+            self.assertTrue(result['fan']['estimated'])
+            self.assertEqual(result['fan_setting']['level'],1)
+            _,text=self.run_status(dict(working_status=state,fan=dict(level=1,percent=20)),True)
+            self.assertIn('Fan: off (level 0/3)',text)
+        for state in ['AutoClean','SpotClean','PlanningRect','SelectClean','DirectionControl']:
+            _,result=self.run_status(dict(working_status=state,fan=dict(level=2,percent=50)))
+            self.assertEqual(result['fan']['level'],2)
+        _,result=self.run_status(dict(working_status='unknown',fan=dict(level=2,percent=50)))
+        self.assertIsNone(result['fan']['level'])
+
     def test_stale_and_future(self):
         for delta,quality in [(-120,'stale'),(120,'clock_mismatch')]:
             r,s=self.run_status(dict(working_status='Standby',observed_at=time.time()+delta))

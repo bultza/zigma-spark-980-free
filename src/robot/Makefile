@@ -102,3 +102,9 @@ test-robojet:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_robojet.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-robojet
 	build/tests/test-robojet
+
+.PHONY: test-setfan
+test-setfan:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_setfan.c $(CJSON) -lm -o build/tests/test-setfan
+	build/tests/test-setfan

@@ -115,3 +115,23 @@ See [Installer internals and build](BUILD.md) for details on the computer and ro
 ## RC18: OKAMI U100 Plus
 
 RC18 recognizes the original firmware reported in [issue 09](https://github.com/bultza/zigma-spark-980-free/issues/9) with the strict `okami-u100-plus-issue09-kernel23` profile. It preserves native binaries and device calibration. Full installation, web access and native v2 map/zone persistence after reboot were verified on the Ciccia adaptation; original OKAMI hardware and physical cleaning still require owner validation. Existing RC17 profiles and upgrade timezone migration are retained. Full startup also works without the optional Telegram transport files.
+
+## RC20 control and telemetry updates
+
+`zigmactl setfan 1|2|3` selects minimum, medium or maximum suction without
+starting/resuming cleaning. `clean` and `resume` retain the initial fan selection,
+send the start command once, then repeat the same fan selection after at least
+500 ms. Interrupted waits resume for the remaining duration. A nonzero exit can
+mean the final fan submission failed after cleaning was already requested; it
+does not mean the start was rolled back. This timing workaround still needs
+validation on the reporting Puron owner's robot.
+
+`zigmactl status` and `status --json` include a state-based fan estimate.
+Outside AutoClean, SpotClean, PlanningRect, SelectClean and DirectionControl,
+fan level and percentage are shown as zero; an unknown state stays unknown.
+The JSON marks this as `fan.estimated: true` with `source: state_estimate`.
+`fan_setting` retains the selected level and the native reported percentage
+when validated (otherwise null). This is not a physical motor-running sensor.
+For the verified Zigma app profile used by Caccamora and Ciccio, state reporting
+uses the separate controller-state cache instead of relying on a system-info
+cache that can retain CleanDone. Memory reads do not prove sensor freshness.

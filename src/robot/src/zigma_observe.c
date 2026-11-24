@@ -125,6 +125,33 @@ static void remember_map_geometry(cJSON *map){
  cJSON_Delete(map_geometry);map_geometry=cJSON_CreateObject();
  for(const char **k=(const char*[]){"map_id","width","height","map_origin",NULL};*k;k++){cJSON *v=get(map,*k);if(v)cJSON_AddItemToObject(map_geometry,*k,cJSON_Duplicate(v,1));}
 }
+/* Fan enum is shared by validated native status profiles. Percentage is
+ * reported separately; never infer a duty cycle from a named level. */
+static void status_fan(cJSON *status,int raw,int percent){
+ cJSON_DeleteItemFromObjectCaseSensitive(status,"fan");
+ cJSON *fan=cJSON_CreateObject();
+ cJSON_AddNumberToObject(fan,"raw",raw);
+ const int levels[]={2,3,1};const char *names[]={"medium","maximum","minimum"};
+ if(raw>=0&&raw<=2){cJSON_AddNumberToObject(fan,"level",levels[raw]);cJSON_AddStringToObject(fan,"name",names[raw]);}
+ else{cJSON_AddNullToObject(fan,"level");cJSON_AddStringToObject(fan,"name","unknown");}
+ if(percent>=0&&percent<=100)cJSON_AddNumberToObject(fan,"percent",percent);else cJSON_AddNullToObject(fan,"percent");
+ cJSON_AddItemToObject(status,"fan",fan);
+}
+/* Only this exact app profile has a verified robot_work_state symbol.
+ * The system-info cache can retain CleanDone even during a subsequent clean.
+ * Two equal reads establish consistency, not sensor measurement freshness. */
+static void cached_work_state(cJSON *status,int fd,const struct zigma_app_profile *profile){
+ if(profile!=&zigma_app_profiles[0])return;
+ int32_t a=-1,b=-2;
+ if(!memory_read(fd,0x48eac,&a,4)||!memory_read(fd,0x48eac,&b,4)||a!=b||!strcmp(vendor_state(a),"unknown")){
+  replace_value(status,"working_status",cJSON_CreateString("unknown"));
+  replace_value(status,"observed_at",cJSON_CreateNumber(0));return;
+ }
+ replace_value(status,"working_status_source",cJSON_CreateString("robot_work_state_cache"));
+ replace_value(status,"working_state_code",cJSON_CreateNumber(a));
+ replace_value(status,"working_status",cJSON_CreateString(vendor_state(a)));
+ if(a!=number(status,"vendor_state_code"))replace_value(status,"observed_at",cJSON_CreateNumber(0));
+}
 static bool cached_status_profile(cJSON *status,int fd,const struct zigma_app_profile *profile){
  if(!profile||(profile->status_size!=100&&profile->status_size!=92))return false;
  size_t size=profile->status_size;
@@ -138,6 +165,7 @@ static bool cached_status_profile(cJSON *status,int fd,const struct zigma_app_pr
  char err[40];snprintf(err,sizeof(err),"VendorError%d",error);replace_value(status,"error",cJSON_CreateString(error?err:"NoError"));
  replace_value(status,"vendor_state_code",cJSON_CreateNumber(state));replace_value(status,"battery_level",cJSON_CreateNumber(battery));
  replace_value(status,"vendor_error_code",cJSON_CreateNumber(error));replace_value(status,"vendor_clean_area_raw",cJSON_CreateNumber(area));replace_value(status,"vendor_clean_time_raw",cJSON_CreateNumber(minutes));
+ status_fan(status,a[1],profile==&zigma_app_profiles[0]?a[24]:-1);
  replace_value(status,"clean_area_m2",cJSON_CreateNumber(area));replace_value(status,"clean_time_s",cJSON_CreateNumber((double)minutes*60));
  /* recv_packet report format: con_clean=a[4], obstacles_cross=a[7]. */
  if((a[4]==0||a[4]==1)&&(a[7]==0||a[7]==1)){
@@ -169,6 +197,7 @@ static void enrich_status(cJSON *status){
  if(!strcmp(profile->name,"puron")){
   ok=cached_puron_status(status,fd);cached_puron_settings(status,fd);
  }else ok=cached_status_profile(status,fd,profile);
+ if(ok)cached_work_state(status,fd,profile);
  close(fd);if(!ok)return;
  /* Queue activity is link evidence, never a timestamp for this status block. */
  key_t key=ftok("/",15);int q=key==(key_t)-1?-1:msgget(key,0);struct msqid_ds info;
