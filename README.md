@@ -2,7 +2,7 @@
 
 In August 2026, all Zigma Spark-980 robots lost its WiFi connectivity all over the world. During the investigation, we captured a command delivered through the cloud service that disables the Wi-Fi on the robot (an auto destruct command!). A similar loss of app control affected the Redmond RV-R670S in October, when we found expired TLS certificates on the service's HTTPS endpoints. [Skip to how we discovered access](hack/HISTORY.md) if you’re here for the hack.
 
-If you just want to install it on your Zigma (or Redmond, Puron or RoboJet) robots, go directly to the [Installation Manual](installer/README.md)
+If you just want to install it on your Zigma (or Redmond, Puron, RoboJet or OKAMI) robots, go directly to the [Installation Manual](installer/README.md)
 
 The Zigma Spark-980 is a robot vacuum cleaner that uses a LiDAR laser scanner to map your home and navigate as it cleans. It returns to its charging dock on its own and was originally controlled through a mobile app that relied on the manufacturer's cloud service.
 
@@ -26,12 +26,21 @@ The installer will be able to access and expose the SSH of your robots for these
 - **Puron PR10** - Currently under testing
 - **RoboJet X-One (Issue08)** - Exact-profile support, tested using its adapted firmware on Ciccia. Maps, map-derived position, settings, area commands and general no-go polygons are implemented; live LiDAR and navigation-memory pose are not enabled. See the [support matrix](hack/ROBOJET_ISSUE08_SUPPORT.md).
 
+- **OKAMI U100 Plus (Issue09)** - The reported original firmware is supported by the strict `okami-u100-plus-issue09-kernel23` profile. Full installation, native RoboJet v2 map import and map/zone persistence after reboot were verified using its adapted firmware on Ciccia. Original OKAMI hardware and physical cleaning still need owner validation. See [OKAMI support](hack/OKAMI_ISSUE09_SUPPORT.md).
+
 ### Potentially compatible models
 
 - **Redmond RV-R670S** - I need beta testers so please try the installer and report with an issue!
 - **Redmond RV-R650S** - It has not lidar but it should be possible to at least get a SSH terminal.
 
-## Firmware variants and RC17 findings
+## Firmware variants and RC18 findings
+
+RC18 adds the reported **OKAMI U100 Plus Issue09** firmware: kernel #23,
+six-partition overlay, original Wi-Fi/client components and the exact RoboJet
+app/navigation pair. Numeric device calibration is preserved. The same reviewed
+startup template covers the Ciccia test adaptation without replacing vendor
+executables. RC18 also fixes Full startup when optional Telegram transport files
+are omitted. All RC17 profiles and timezone migration remain included.
 
 Compatibility is selected by flash layout and exact component hashes, not by the
 model name alone. The **Issue10** direct kernel16 profile is included, with its

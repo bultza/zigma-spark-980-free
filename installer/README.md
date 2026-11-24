@@ -111,3 +111,7 @@ If SSH reports that the host key is unknown or does not match, stop and verify t
 ## Installer internals and build
 
 See [Installer internals and build](BUILD.md) for details on the computer and robot scripts, compilation, and release packaging.
+
+## RC18: OKAMI U100 Plus
+
+RC18 recognizes the original firmware reported in [issue 09](https://github.com/bultza/zigma-spark-980-free/issues/9) with the strict `okami-u100-plus-issue09-kernel23` profile. It preserves native binaries and device calibration. Full installation, web access and native v2 map/zone persistence after reboot were verified on the Ciccia adaptation; original OKAMI hardware and physical cleaning still require owner validation. Existing RC17 profiles and upgrade timezone migration are retained. Full startup also works without the optional Telegram transport files.

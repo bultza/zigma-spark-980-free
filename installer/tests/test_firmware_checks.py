@@ -185,6 +185,21 @@ class FirmwareChecks(unittest.TestCase):
             changed=dict(files);changed[path]=CATALOG['variants'][base]['files'][path]
             self.assertTrue(self.run_checks(base,changed=changed)[0].startswith('RESULT:ssh:1:'))
 
+    def test_okami_overlay_profile_and_unknown_components(self):
+        component = next(p for p in CATALOG['variants'][OVERLAY]['component_profiles']
+                         if p['name'] == 'okami-u100-plus-issue09-kernel23')
+        files = component['files']
+        result, output = self.run_checks(OVERLAY, changed=files)
+        self.assertEqual(result, 'RESULT:full:0:/root/bin:/root/lib:/lib:/usr/lib')
+        self.assertIn(component['name'], output)
+        for path in files:
+            for bad in (None, 'a'*64):
+                with self.subTest(path=path, bad=bad):
+                    changed = dict(files); changed[path] = bad
+                    self.assertTrue(self.run_checks(OVERLAY, changed=changed)[0].startswith('RESULT:ssh:1:'))
+        changed = dict(files); changed[NAV] = CATALOG['variants'][OVERLAY]['files'][NAV]
+        self.assertTrue(self.run_checks(OVERLAY, changed=changed)[0].startswith('RESULT:ssh:1:'))
+
     def test_original_bases_unchanged(self):
         for name in CATALOG['variants']:
             with self.subTest(name=name):

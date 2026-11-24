@@ -319,3 +319,11 @@ checks profile precedence, preserved settings, winter/summer offsets, unchanged
 Unix timestamps, idempotence, absent zone and conflicting profile mount handling,
 and navigation launcher staging without starting navigation. Bind mounts are
 simulated in host tests; a physical next-boot check remains required.
+
+## OKAMI U100 Plus Issue09 overlay support
+
+`okami-u100-plus-issue09-kernel23` recognizes the exact reviewed app/navigation, client, driver and startup components on the original Ciccia kernel23 overlay base. The S51hoslam template accepts numeric calibration differences only, preserving both the original OKAMI values and the reviewed Ciccia test adaptation. Unknown executables, modified startup logic or mixed pairs remain SSH-only. No vendor payload is distributed or replaced. Physical validation on the original OKAMI is separate from Ciccia testing.
+
+Service V1.11 passes Telegram transport paths only when both optional files are available. A Full bundle without Telegram can start the web/agent normally; incomplete optional transport does not advertise Telegram availability.
+
+Physical validation (2026-11-24): on Ciccia with the reviewed OKAMI adaptation, Full installation and authenticated web/local-mode acceptance passed; 450 deployed stack/tool hashes and unchanged native calibration were verified. A subsequent native MAP_11 import and coordinated reboot preserved the active map, live publication and three no-go polygons. SSH/web and selected timezone in native app/navigation/cron were verified after reboot. No movement was requested; original OKAMI hardware and physical cleaning remain unvalidated. Installer suite: 115 tests pass.

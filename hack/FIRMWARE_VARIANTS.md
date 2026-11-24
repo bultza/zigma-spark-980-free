@@ -12,6 +12,7 @@ All kernels identified here are Linux 4.14.14. The build number is the `#` suffi
 | Ciccia | Zigma | Overlay, six partitions | `#23` | `ce73b4c04b01` | `b10fc7b48d1b` | `4cf0709919f0` |
 | Issue 01a | Puron | Overlay, six partitions | `#23` | `ce73b4c04b01` | `6b7b11091132` | `784fbcda505d` |
 | Issue 01b | Zigma | Direct, five partitions | `#16` | `2bc882825a5d` | `b10fc7b48d1b` | `4cf0709919f0` |
+| Issue 09 (OKAMI U100 Plus) | RoboJet | Overlay, six partitions | `#23` | `ce73b4c04b01` | `f793e93abb85` | `8e323cfe110e` |
 | Issue 03 | Puron | Direct, five partitions | `#20` | `cac314d83760` | `6b7b11091132` | `784fbcda505d` |
 
 | Samples with matching base partitions | U-Boot | DTB | Kernel | SquashFS rootfs |
@@ -104,3 +105,7 @@ Selection uses the native pair plus S70yg within the existing Ciccia direct base
 all components are checked strictly. The original `ciccio-issue10-kernel16` and
 both RoboJet profiles remain supported. Physical installation/cold boot validation
 is separate from offline recognition. No firmware files are replaced by detection.
+
+## Issue 09: OKAMI U100 Plus
+
+RC18 includes `okami-u100-plus-issue09-kernel23` for the received original firmware on the Ciccia kernel23 overlay base. Twenty required component checks include the exact RoboJet pair and original client/driver/startup scripts. The reviewed navigation template preserves numeric device calibration and also covers the Ciccia adaptation. Full installation and native v2 map persistence after reboot passed on Ciccia; original OKAMI hardware and physical cleaning remain unvalidated. See [profile and validation](OKAMI_ISSUE09_SUPPORT.md).

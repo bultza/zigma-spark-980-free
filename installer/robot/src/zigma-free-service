@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.10 (packaged 2026-11-23T00:00:00+01:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-free-service V1.11 (packaged 2026-11-24T00:00:00+01:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Persistent own runtime; telemetry, demand markers and process logs remain in RAM.
@@ -122,7 +122,12 @@ case "${1:-}" in
   fi
   if ! alive agent;then
   "$base/zigma-cron" ensure 6>&-
-  nohup nice -n 10 "$base/free-zigma-agent-arm" --listen 0.0.0.0 --name "$robot_name" --mode commands --telegram-curl "$base/zigma-curl-arm" --telegram-ca "$base/telegram-ca.pem" --control-bin /root/bin/zigmactl --zones-bin "$base/zigma-zones-arm" --area-bin "$base/zigma-area-arm" --settings-bin "$base/zigma-settings" --options-bin "$base/zigma-options-arm" --voices-dir /root/voice --ssh-keys-file /root/.ssh/authorized_keys --maps-bin "$base/zigma-maps-arm" --maps-dir /root/hoslam --map-library-dir /root/zigma-free-master-maps --maps-app-pid "$app_pid" --status-file "$ram/observation/status.json" --map-file "$ram/observation/map.json" --data-dir "$base/data" --core-records-dir "$base/data/core-records" --web-dir "$base/src" --port 8765 --cron-dir /root/etc/crontabs --crontab-bin /usr/bin/crontab --cron-helper "$base/zigma-cron" >"$ram/agent.log" 2>&1 </dev/null 6>&- &
+  # Telegram transport is optional in Full bundles. Supply both paths or neither.
+  set --
+  if test -x "$base/zigma-curl-arm" && test -r "$base/telegram-ca.pem";then
+   set -- --telegram-curl "$base/zigma-curl-arm" --telegram-ca "$base/telegram-ca.pem"
+  fi
+  nohup nice -n 10 "$base/free-zigma-agent-arm" --listen 0.0.0.0 --name "$robot_name" --mode commands "$@" --control-bin /root/bin/zigmactl --zones-bin "$base/zigma-zones-arm" --area-bin "$base/zigma-area-arm" --settings-bin "$base/zigma-settings" --options-bin "$base/zigma-options-arm" --voices-dir /root/voice --ssh-keys-file /root/.ssh/authorized_keys --maps-bin "$base/zigma-maps-arm" --maps-dir /root/hoslam --map-library-dir /root/zigma-free-master-maps --maps-app-pid "$app_pid" --status-file "$ram/observation/status.json" --map-file "$ram/observation/map.json" --data-dir "$base/data" --core-records-dir "$base/data/core-records" --web-dir "$base/src" --port 8765 --cron-dir /root/etc/crontabs --crontab-bin /usr/bin/crontab --cron-helper "$base/zigma-cron" >"$ram/agent.log" 2>&1 </dev/null 6>&- &
   identity agent "$!"
   fi
   # One configuration read per native process identity, never periodic polling.
