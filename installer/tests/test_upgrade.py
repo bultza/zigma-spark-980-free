@@ -126,6 +126,36 @@ class ManagedPayload(unittest.TestCase):
             self.assertNotIn(upgrade.BASE+'/'+suffix, files)
         self.assertNotIn('/root/etc/init.d/S98zigma-free', files)
 
+    def test_full_without_telegram_preserves_optional_absence(self):
+        self.old['items'] = [x for x in self.old['items'] if x['name'] != 'zigma-curl-arm']
+        incoming = json.loads(self.full['stack/release.json'][0])
+        incoming['items'] = [x for x in incoming['items'] if x['name'] != 'zigma-curl-arm']
+        self.full['stack/release.json'] = (json.dumps(incoming).encode(), 0o600)
+        for name in ('zigma-curl-arm',) + upgrade.TRANSPORT_FILES:
+            del self.full['stack/'+name]
+        with patch.object(upgrade.installer, 'files_for', return_value=self.full) as build:
+            files = upgrade.payload(self.old)
+        build.assert_called_once_with('full', telegram=False)
+        for name in ('zigma-curl-arm',) + upgrade.TRANSPORT_FILES:
+            self.assertNotIn(upgrade.BASE+'/'+name, files)
+        self.assertIn(upgrade.BASE+'/free-zigma-agent-arm', files)
+        self.assertIn(upgrade.BASE+'/zigma-free-service', files)
+        expected = json.loads(files[upgrade.BASE+'/release.json'][0])
+        self.assertNotIn('zigma-curl-arm', [x['name'] for x in expected['items']])
+        upgrade.verify_inventory({'items':[dict(x, status='verified') for x in expected['items']]}, expected)
+
+    def test_missing_required_binary_and_malformed_optional_inventory_rejected(self):
+        for name, problem in (('free-zigma-agent-arm', 'missing'),
+                              ('zigma-curl-arm', 'path'), ('zigma-curl-arm', 'kind'),
+                              ('zigma-curl-arm', 'duplicate')):
+            self.old = copy.deepcopy(self.original)
+            row = next(x for x in self.old['items'] if x['name'] == name)
+            if problem == 'missing': self.old['items'].remove(row)
+            elif problem == 'duplicate': self.old['items'].append(row.copy())
+            else: row[problem] = 'unexpected'
+            with self.subTest(name=name, problem=problem), self.assertRaises(ValueError):
+                self.payload()
+
     def test_missing_misidentified_or_duplicate_script_inventory_is_rejected(self):
         for problem in ('missing', 'path', 'kind', 'duplicate'):
             self.old = copy.deepcopy(self.original)

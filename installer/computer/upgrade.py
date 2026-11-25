@@ -230,7 +230,10 @@ esac
 
 def payload(old):
     """Update the explicit managed-runtime allowlist and its inventory together."""
-    full = installer.files_for('full', telegram=True)
+    # Preserve the original optional Telegram selection. Absence from the
+    # inventory is legitimate for Full installed without --telegram.
+    telegram = any(row.get('name') == 'zigma-curl-arm' for row in old['items'])
+    full = installer.files_for('full', telegram=telegram)
     incoming = json.loads(full['stack/release.json'][0])['items']
     rows = {row['name']: row for row in incoming if row['name'] in INVENTORY_NAMES}
     previous = {row['name']: row for row in old['items']}
@@ -238,6 +241,8 @@ def payload(old):
         raise ValueError('Duplicate installed component inventory')
     files = {}
     for name in INVENTORY_NAMES:
+        if name == 'zigma-curl-arm' and not telegram:
+            continue
         target = '/root/bin/'+name if name in ('zigmactl', 'zigma-time-sync') else BASE+'/'+name
         kind = 'binary' if name in BINARY_NAMES else 'script'
         row, before = rows.get(name, {}), previous.get(name, {})
@@ -249,7 +254,7 @@ def payload(old):
             raise ValueError('Package component checksum mismatch: '+name)
     for target, source in SCRIPT_FILES.items():
         files[target] = full[source]
-    for name in TRANSPORT_FILES:
+    for name in TRANSPORT_FILES if telegram else ():
         files[BASE+'/'+name] = full['stack/'+name]
     for name in WEB_NAMES:
         files[BASE+'/src/'+name] = full['stack/src/'+name]
