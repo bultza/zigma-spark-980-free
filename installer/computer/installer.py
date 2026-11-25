@@ -22,6 +22,15 @@ HERE = Path(__file__).resolve().parent
 ROBOT = HERE.parent / 'robot'
 PROFILES = ('ssh', 'tools', 'full')
 
+def package_version():
+    """Package identity for an informational, manually editable robot label."""
+    source = HERE.parent/'VERSION'
+    value = source.read_text().strip() if source.is_file() else 'dev'
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', value):
+        raise ValueError('Invalid package version')
+    return value
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -317,7 +326,7 @@ def build(profile, key, base_url, name='Vacuum', telegram=False):
         'BUNDLE_SHA':digest(bundle),'BUNDLE_KIB':str((len(bundle)+1023)//1024),
         'PAYLOAD_KIB':str(sum((len(d)+1023)//1024 for d,_ in files.values())+128),
         'STACK_KIB':str(sum((len(d)+1023)//1024 for n,(d,_) in files.items() if n.startswith('stack/'))+128),
-        'ROBOT_NAME':name,'HOSTNAME':hostname}
+        'ROBOT_NAME':name,'HOSTNAME':hostname,'INSTALLER_VERSION':package_version()}
     script=(ROBOT/'install.sh.in').read_text().replace('@@FIRMWARE_CHECKS@@', firmware_checks())
     hosts_script = (ROBOT/'vendor-hosts.sh').read_text()
     if 'ZIGMA_EMBEDDED_VENDOR_HOSTS' in hosts_script.splitlines():

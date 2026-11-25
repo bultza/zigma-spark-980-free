@@ -7,7 +7,7 @@ For the installation steps, see [Install Zigma Free](README.md).
 | Script | What it does |
 | --- | --- |
 | `install-from-linux.sh`, `install-from-windows.cmd`, `run-windows.cmd` | Start the wizard and prepare its Python environment using `requirements-wizard.txt`. |
-| `upgrade-from-linux.sh`, `upgrade-from-windows.cmd` | Start the SSH binary/web updater without pairing or Wi-Fi switching. |
+| `upgrade-from-linux.sh`, `upgrade-from-windows.cmd` | Start the SSH managed-runtime updater without pairing or Wi-Fi switching. |
 | `run-linux.sh`, `run-windows.cmd` | Prepare the shared Python environment. |
 | `wizard.py` | Checks the package and network, guides pairing, verifies SSH access, and runs the local-mode activation checks. |
 | `installer.py` | Builds the per-robot installation script and payload. It reads `known-firmware.json` to generate the firmware checks. |
@@ -327,3 +327,57 @@ simulated in host tests; a physical next-boot check remains required.
 Service V1.11 passes Telegram transport paths only when both optional files are available. A Full bundle without Telegram can start the web/agent normally; incomplete optional transport does not advertise Telegram availability.
 
 Physical validation (2026-11-24): on Ciccia with the reviewed OKAMI adaptation, Full installation and authenticated web/local-mode acceptance passed; 450 deployed stack/tool hashes and unchanged native calibration were verified. A subsequent native MAP_11 import and coordinated reboot preserved the active map, live publication and three no-go polygons. SSH/web and selected timezone in native app/navigation/cron were verified after reboot. No movement was requested; original OKAMI hardware and physical cleaning remain unvalidated. Installer suite: 115 tests pass.
+
+## RC20: managed runtime updates
+
+The updater now copies an explicit allowlist of package-owned scripts alongside
+binaries and web assets: `zigma-mode`, `zigma-mode-backend`, `zigma-free-service`,
+`zigma-cron`, `zigma-settings`, `/root/bin/zigma-time-sync`, `activate` and
+`firmware-profile.sh`. Telegram CA and transport notices travel with the curl
+binary. Required versioned runtime files must already exist as regular files. Legacy
+installations may lack `activate` and `firmware-profile.sh`; these two helpers
+are added without executing them. Missing CA/notices may also be added. All
+these additions use absence-aware rollback. A missing `licenses` directory is
+created only for `licenses/transport.txt`, with mode 0755, after preflight. If
+rollback is needed, the worker removes that directory only if it created it and
+it is empty; concurrent user files are preserved. Preflight failures log the
+check phase and target path. Newly added files are removed on
+failure, while symlinks and external changes are refused or preserved.
+
+Versioned script paths and kinds must match the installed inventory. Their new
+hashes/versions are recorded together with the binary inventory and checked via
+About before acceptance. The remote worker permits only exact managed target
+paths, validates all incoming shell scripts before the first write, and uses the
+same backed-up bytes, permissions, atomic replacement, final hash check and
+rollback as the binaries. A failed service restart restores the previous scripts
+and inventory too. External changes are preserved and reported as a rollback
+failure, never silently overwritten.
+
+No activation command is run merely to apply the backend update. The existing
+coordinator is not killed; already-running shell code adopts the new file on its
+next start. Native processes and boot identity remain guarded. Per-device data,
+firmware selection, credentials, cron jobs and vendor startup wrappers remain
+outside this allowlist. Other init scripts and timezone database files still
+need dedicated migrations; the existing S04/S51 timezone migration is retained.
+
+Regression tests exercise script inclusion, inventory validation, acceptance,
+disconnection rollback, restored permissions, invalid-shell rejection before
+any write, service failure and preservation of concurrent edits. These are host
+fixtures, not a physical-robot or complete QEMU upgrade validation.
+
+## Informational deployment label
+
+The packager writes its `--label` to the package-root `VERSION` metadata file.
+Source runs use `installer/VERSION`; an absent metadata file falls back to `dev`.
+Full installation writes `/root/zigma-free/installer-version.txt` after staging
+and SSH checks. The updater stages the package label separately from files.list
+and writes it only during acceptance, or on a successful no-op update.
+The installed label is never hashed, compared with an expected value, added to
+release.json, or consulted for upgrade/firmware decisions. It is not rolled back
+because it is unchanged until acceptance. Transport/package integrity still
+protects the incoming package metadata, independently of the editable robot file.
+
+The agent reads up to 256 bytes as display text on each About request, outside
+the component verification loop. The web renders it with textContent above the
+project information. Missing/empty labels show Not recorded. No modification
+history or tamper status is produced for this informational file.

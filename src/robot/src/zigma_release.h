@@ -2,6 +2,15 @@
 #define ZIGMA_RELEASE_H
 /* Installed artifact metadata is trusted only when the bytes match the release. */
 static const char *release_file="/root/zigma-free/release.json";
+/* Display-only label: no digest, expected value, status or integrity decision. */
+static const char *installer_version_file="/root/zigma-free/installer-version.txt";
+static void installer_version_view(cJSON *out){
+ char text[257];ssize_t n=-1;
+ int fd=open(installer_version_file,O_RDONLY|O_NOFOLLOW|O_NONBLOCK);
+ if(fd>=0){struct stat st;if(!fstat(fd,&st)&&S_ISREG(st.st_mode))n=read(fd,text,sizeof(text)-1);close(fd);}
+ if(n>0){text[n]=0;while(n>0&&(text[n-1]=='\n'||text[n-1]=='\r'))text[--n]=0;}
+ if(n>0)cJSON_AddStringToObject(out,"installer_version",text);else cJSON_AddNullToObject(out,"installer_version");
+}
 static bool release_digest(const char *file,char hex[65]){
  int fd=open(file,O_RDONLY|O_NOFOLLOW|O_NONBLOCK);if(fd<0)return false;
  struct stat st;if(fstat(fd,&st)||!S_ISREG(st.st_mode)||st.st_size>20*1024*1024){close(fd);return false;}
@@ -15,6 +24,7 @@ static bool release_digest(const char *file,char hex[65]){
 }
 static cJSON *release_view(void){
  cJSON *out=cJSON_CreateObject(),*items=cJSON_AddArrayToObject(out,"items");
+ installer_version_view(out);
  char *raw=read_file(release_file,65536);cJSON *manifest=raw?strict_json(raw):NULL;free(raw);
  cJSON *list=get(manifest,"items");bool available=cJSON_IsArray(list)&&cJSON_GetArraySize(list)<=64;setbool(out,"available",available);
  if(available){cJSON *entry;cJSON_ArrayForEach(entry,list){

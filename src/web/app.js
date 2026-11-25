@@ -732,14 +732,14 @@ setInterval(async()=>{
 $('telegram-select-commands').addEventListener('click',()=>{const field=$('telegram-botfather');field.focus();field.select();});
 
 async function loadSoftware(){
- const status=$('software-status');status.textContent='Checking installed software…';
- try{const data=await api('/api/about');const rows=[];
+ const status=$('software-status');status.textContent='Checking installed software…';$('installer-version').textContent='Loading…';
+ try{const data=await api('/api/about');$('installer-version').textContent=data.installer_version||'Not recorded';const rows=[];
   for(const item of [...(data.items||[])].sort((a,b)=>a.name.localeCompare(b.name,'en',{sensitivity:'base',numeric:true}))){const row=document.createElement('tr'),name=document.createElement('td');
    const label=document.createElement('strong');label.textContent=item.name;const path=document.createElement('code');path.textContent=item.path;name.append(label,path);row.append(name);
    const date=item.compiled_at?new Date(item.compiled_at).toLocaleString('en-GB',{timeZone:robotTimezone}):item.prepared_at?'Packaged '+new Date(item.prepared_at).toLocaleString('en-GB',{timeZone:robotTimezone}):'Not recorded (legacy build)';
    for(const [heading,value] of [['Version',item.version||'Unknown'],['Build date',date],['Status',item.status]]){const cell=document.createElement('td');cell.dataset.label=heading;cell.textContent=value;row.append(cell);}rows.push(row);
   }$('software-list').replaceChildren(...rows);status.textContent=data.available?'Installed files checked against the release manifest. Dates use '+robotTimezone+'.':'No release manifest installed.';
- }catch(error){status.textContent='Software versions could not be checked.';throw error;}
+ }catch(error){$('installer-version').textContent='Unavailable';status.textContent='Software versions could not be checked.';throw error;}
 }
 
 

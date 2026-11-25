@@ -1,5 +1,5 @@
 #!/bin/sh
-# Detached bounded upgrade with boot-timezone migration and verified PC backups.
+# Detached bounded managed-runtime upgrade with verified PC backups.
 set -eu
 umask 077
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/root/bin
@@ -20,12 +20,18 @@ identity() {
 }
 checkpath() {
  case "$path" in
- /root/bin/zigmactl|/root/zigma-free/*|/root/etc/init.d/S04zigma-timezone|/root/etc/init.d/S51hoslam) :;; *) return 1;; esac
+ /root/bin/zigmactl|/root/bin/zigma-time-sync|\
+ "$base/free-zigma-agent-arm"|"$base/zigma-observe-arm"|"$base/zigma-core-arm"|"$base/zigma-network-arm"|\
+ "$base/zigma-area-arm"|"$base/zigma-zones-arm"|"$base/zigma-maps-arm"|"$base/zigma-options-arm"|"$base/zigma-curl-arm"|\
+ "$base/zigma-mode"|"$base/zigma-mode-backend"|"$base/zigma-free-service"|"$base/zigma-cron"|"$base/zigma-settings"|\
+ "$base/activate"|"$base/firmware-profile.sh"|"$base/telegram-ca.pem"|"$base/licenses/transport.txt"|"$base/release.json"|\
+ "$base/src/app.js"|"$base/src/index.html"|"$base/src/style.css"|"$base/src/nor.js"|"$base/src/favicon.svg"|\
+ /root/etc/init.d/S04zigma-timezone|/root/etc/init.d/S51hoslam) :;; *) return 1;; esac
  case "$path" in *..*|*[!a-zA-Z0-9/._-]*) return 1;; esac
  test ! -L "$path" || return 1
  if test "$oldsha" = absent; then
   case "$path" in
-   "$base/src/app.js"|"$base/src/index.html"|"$base/src/style.css"|"$base/src/nor.js"|"$base/src/favicon.svg"|/root/etc/init.d/S04zigma-timezone) :;;
+   "$base/src/app.js"|"$base/src/index.html"|"$base/src/style.css"|"$base/src/nor.js"|"$base/src/favicon.svg"|"$base/telegram-ca.pem"|"$base/licenses/transport.txt"|"$base/activate"|"$base/firmware-profile.sh"|/root/etc/init.d/S04zigma-timezone) :;;
    *) return 1;;
   esac
   test ! -e "$path" || test -f "$path" || return 1
@@ -33,7 +39,16 @@ checkpath() {
   test -f "$path" || return 1
  fi
  parent=$(dirname "$path")
- while test "$parent" != /; do test -d "$parent" && test ! -L "$parent" || return 1; parent=$(dirname "$parent"); done
+ while test "$parent" != /; do
+  if test ! -d "$parent"; then
+   # Only this package-owned directory may be absent on older installations.
+   test "$parent" = "$base/licenses" && test "$path" = "$base/licenses/transport.txt" &&
+    test "$oldsha" = absent && test ! -e "$parent" && test ! -L "$parent" || return 1
+  else
+   test ! -L "$parent" || return 1
+  fi
+  parent=$(dirname "$parent")
+ done
 }
 current_sha() {
  if test -f "$path"; then sha "$path"; else echo absent; fi
@@ -71,6 +86,12 @@ replace_files() {
     rm "$path" || return 1
     continue
    fi
+   if test "$direction" = new && test "$path" = "$base/licenses/transport.txt" && test ! -d "$base/licenses"; then
+    # Parent checks above reject links. mkdir also refuses concurrent creation.
+    mkdir "$base/licenses" || return 1
+    : > "$stage/created-licenses"
+    chmod 755 "$base/licenses" || return 1
+   fi
    gzip -dc "$stage/$index.$direction.gz" > "$path.zigma-upgrade-new" || return 1
    test "$(sha "$path.zigma-upgrade-new")" = "$expected" || return 1
    chmod "$mode" "$path.zigma-upgrade-new" || return 1
@@ -78,6 +99,11 @@ replace_files() {
    restart_daemon || return 1
   fi
  done < "$stage/files.list"
+ if test "$direction" = old && test -f "$stage/created-licenses"; then
+  # Never recursively remove a directory: preserve any concurrent additions.
+  rmdir "$base/licenses" || return 1
+  rm "$stage/created-licenses" || return 1
+ fi
  "$base/zigma-free-service" repair-observer 7>&- 9>&- || return 1
  "$base/zigma-free-service" repair-web 7>&- 9>&- || return 1
  sync
@@ -95,37 +121,58 @@ case "$action" in
   while read -r index path oldmode newmode oldsha newsha; do checkpath; test "$(sha "$path")" = "$newsha"; done < "$stage/files.list"
   identity > "$stage/native.current"
   cmp -s "$stage/native.before" "$stage/native.current"
+  # Write only after verification succeeds. The installed label is not part of
+  # files.list/release.json and its previous contents are never inspected.
+  version_tmp=$(mktemp "$base/.installer-version.XXXXXX")
+  cat "$stage/installer-version.txt" > "$version_tmp"
+  chmod 644 "$version_tmp"
+  mv -f "$version_tmp" "$base/installer-version.txt"
+  sync
   echo accepted > "$stage/state"
  ;;
  run)
   # Publish preflight failures even when set -e exits before the first write.
   echo starting > "$stage/state"
-  trap 'rc=$?; if test "$rc" -ne 0 && test "$(cat "$stage/state" 2>/dev/null)" = starting; then echo failed > "$stage/state"; fi' 0
+  phase=initialization; path=
+  trap 'rc=$?; if test "$rc" -ne 0 && test "$(cat "$stage/state" 2>/dev/null)" = starting; then printf "Preflight failed: %s %s (exit %s)\n" "$phase" "${path:-}" "$rc" >&2; echo failed > "$stage/state"; fi' 0
+  phase=installer-lock
   test ! -L /root/.zigma-install
   mkdir -p /root/.zigma-install
   test -d /root/.zigma-install
   test ! -L /root/.zigma-install/lock
   test ! -d /root/.zigma-install/lock
   exec 9>/root/.zigma-install/lock
-  flock -n 9 || { echo failed > "$stage/state"; exit 1; }
+  flock -n 9 || { echo "Preflight failed: installer lock is held" >&2; echo failed > "$stage/state"; exit 1; }
+  phase=pending-installation
   test ! -e /root/.zigma-install/pending
+  phase=transaction-lock
   lock
+  phase=boot-identity
   sameboot
+  phase=native-process-identity
   identity > "$stage/native.before"
   # Validate every original and both compressed versions before the first write.
   while read -r index path oldmode newmode oldsha newsha; do
+   phase=target-path
    checkpath
+   phase=original-file-hash
    test "$(current_sha)" = "$oldsha"
+   phase=temporary-target
    test ! -e "$path.zigma-upgrade-new" && test ! -L "$path.zigma-upgrade-new"
+   phase=backup-hash
    if test "$oldsha" != absent; then
     test "$(gzip -dc "$stage/$index.old.gz" | sha256sum | cut -d ' ' -f1)" = "$oldsha"
    fi
+   phase=incoming-hash
    test "$(gzip -dc "$stage/$index.new.gz" | sha256sum | cut -d ' ' -f1)" = "$newsha"
    case "$path" in
+    "$base/zigma-mode"|"$base/zigma-mode-backend"|"$base/zigma-free-service"|"$base/zigma-cron"|"$base/zigma-settings"|\
+    "$base/activate"|"$base/firmware-profile.sh"|/root/bin/zigma-time-sync|\
     /root/etc/init.d/S04zigma-timezone|/root/etc/init.d/S51hoslam)
-     gzip -dc "$stage/$index.new.gz" > "$stage/timezone-syntax.sh"
-     sh -n "$stage/timezone-syntax.sh"
-     rm "$stage/timezone-syntax.sh";;
+     phase=shell-syntax
+     gzip -dc "$stage/$index.new.gz" > "$stage/script-syntax.sh"
+     sh -n "$stage/script-syntax.sh"
+     rm "$stage/script-syntax.sh";;
    esac
   done < "$stage/files.list"
   echo installing > "$stage/state"

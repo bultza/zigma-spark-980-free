@@ -43,11 +43,11 @@ Upgrade needs network access to SSH port 22 and the dashboard on 8765; Ethernet
 is fine. It needs neither pairing nor a download server. Keep the robot idle and
 powered throughout. The assistant checks firmware, saves and verifies copies of
 replaced files in a new private `~/Zigma/upgrade-*` session, and updates compiled
-components and web assets. It retains the original session, private key, maps,
+components, managed runtime scripts, Telegram CA/notices and web assets. It retains the original session, private key, maps,
 settings, tokens and factory firmware. RC17 also migrates the boot timezone:
 it installs `S04zigma-timezone` and adds the selected-zone preamble to `S51hoslam`,
 preserving its launch commands, calibrations and permissions. These two files use
-the same verified PC backups and rollback transaction as the binary/web update.
+the same verified PC backups and rollback transaction as the runtime update.
 If the boot hook was absent, rollback removes the newly added copy. Unknown edits
 or concurrent changes are refused. Repeating the migration does not duplicate it.
 
@@ -64,6 +64,34 @@ remain available for recovery after a power interruption. A failed rollback is
 reported separately; do not blindly repeat an upgrade. No automatic reboot occurs.
 The original installation bundle marker is retained; upgrade provenance is saved
 in the new upgrade session and the component inventory.
+
+RC20 also updates the installed mode backend, coordinator, service launcher,
+settings/cron/time-sync helpers, activation helper and firmware-path reader.
+The pairing DHCP handover fix therefore reaches existing Full installations
+through the updater as well as new installations. Script syntax is checked
+before any replacement; versioned scripts must pass About hash verification
+before acceptance. Backups and rollback include these scripts and their inventory.
+Device configuration, credentials, selected firmware record, schedules, maps and
+vendor startup wrappers are preserved. Other boot hooks and timezone database
+files are not generically replaced; they require a separate migration.
+Already-running coordinator code takes effect on its next start; the updater
+does not switch operating modes or reboot to force it to reload.
+
+
+
+## Installer / updater version
+
+The first card in About shows the last completed installer/updater package label
+from `/root/zigma-free/installer-version.txt` (for example, `v1.1-rc20`).
+It is plain text and may be edited manually. It is not included in the installed
+component inventory or used for integrity checks, compatibility decisions or
+upgrade acceptance. Manual edits are displayed without a modified-file warning.
+Missing files show `Not recorded`.
+
+A completed Full installation or accepted upgrade writes the current package
+label. Running an already-current upgrade refreshes it too. An upgrade that
+rolls back before acceptance leaves the previous label untouched. Component
+verification in About remains separate and unchanged.
 
 ## SSH and session files
 

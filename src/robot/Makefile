@@ -108,3 +108,9 @@ test-setfan:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_setfan.c $(CJSON) -lm -o build/tests/test-setfan
 	build/tests/test-setfan
+
+.PHONY: test-release
+test-release:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) -DNOR_EMBED tests/test_release.c src/zigma_nor_backup.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-release
+	build/tests/test-release

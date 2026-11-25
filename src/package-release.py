@@ -22,7 +22,7 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def stage_package(root):
+def stage_package(root, label="dev"):
     def copy(source, destination):
         if not source.is_file() or source.is_symlink():
             raise ValueError(f'Missing regular package input: {source}')
@@ -105,6 +105,8 @@ def stage_package(root):
         launcher.write_text('#!/bin/sh\nexec sh "$(dirname "$0")/computer/' + name + '" "$@"\n')
         launcher.chmod(0o755)
 
+    (root / 'VERSION').write_text(label+'\n')
+
     # Validate the same files and versions the wizard uses to generate its payload.
     installer = runpy.run_path(str(root / 'computer/installer.py'))
     installer['build']('full', 'ecdsa-sha2-nistp256 fixture', 'http://192.0.2.1:8000',
@@ -137,7 +139,7 @@ def main():
     try:
         with TemporaryDirectory() as directory:
             stage = Path(directory)
-            stage_package(stage / name)
+            stage_package(stage / name, args.label)
             archives = [Path(shutil.make_archive(str(stage / name), kind, stage, name))
                         for kind in formats]
             output.mkdir(parents=True, exist_ok=True)

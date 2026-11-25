@@ -252,6 +252,13 @@ if test "$profile" = full && test "$already" = 0;then
 fi
 /root/etc/init.d/S98dropbear start 9>&-
 pidof dropbear >/dev/null || fail 'SSH daemon did not stay running'
+if test "$profile" = full;then
+ # Informational only: never put this editable label in the release inventory.
+ version_tmp=$(mktemp "$store/.installer-version.XXXXXX")
+ printf '%s\n' @@INSTALLER_VERSION@@ >"$version_tmp"
+ chmod 644 "$version_tmp"
+ mv -f "$version_tmp" "$store/installer-version.txt"
+fi
 sync
 printf '%s\n' "$profile" >"$tx/completed-profile"
 printf '%s\n%s\n%s\n' "$bundle_sha" "$requested_profile" "$profile" >"$tx/session-result"

@@ -1,4 +1,4 @@
-"""SSH-only binary/web and boot-timezone upgrades, with independent rollback and private PC backups."""
+"""SSH-only managed-runtime and boot-timezone upgrades, with independent rollback and private PC backups."""
 import base64
 import datetime
 import getpass
@@ -24,6 +24,21 @@ BINARY_NAMES = ('free-zigma-agent-arm', 'zigma-observe-arm', 'zigma-core-arm',
                 'zigma-network-arm', 'zigma-area-arm', 'zigma-zones-arm',
                 'zigma-maps-arm', 'zigma-options-arm', 'zigma-curl-arm', 'zigmactl')
 WEB_NAMES = ('app.js', 'index.html', 'style.css', 'nor.js', 'favicon.svg')
+# Only package-owned runtime files. Device records, credentials, jobs, vendor
+# wrappers and boot hooks are preserved (timezone hooks have their own migration).
+SCRIPT_NAMES = ('zigma-mode', 'zigma-mode-backend', 'zigma-free-service',
+                'zigma-cron', 'zigma-settings', 'zigma-time-sync')
+SCRIPT_FILES = {BASE+'/'+name: 'stack/'+name for name in SCRIPT_NAMES
+                if name != 'zigma-time-sync'}
+SCRIPT_FILES.update({'/root/bin/zigma-time-sync': 'support/zigma-time-sync',
+                     BASE+'/activate': 'stack/activate',
+                     BASE+'/firmware-profile.sh': 'stack/firmware-profile.sh'})
+# Pre-modular installations lack these helpers; both are safe to add without
+# invoking activation or changing the selected firmware.
+LEGACY_HELPERS = ('activate', 'firmware-profile.sh')
+TRANSPORT_FILES = ('telegram-ca.pem', 'licenses/transport.txt')
+INVENTORY_NAMES = BINARY_NAMES + SCRIPT_NAMES
+
 
 
 TIMEZONE_INIT = '/root/etc/init.d/S04zigma-timezone'
@@ -214,23 +229,43 @@ esac
 
 
 def payload(old):
-    """Update executable/web files only; retain boot scripts and their inventory."""
+    """Update the explicit managed-runtime allowlist and its inventory together."""
     full = installer.files_for('full', telegram=True)
     incoming = json.loads(full['stack/release.json'][0])['items']
-    rows = {row['name']: row for row in incoming if row['kind'] == 'binary'}
+    rows = {row['name']: row for row in incoming if row['name'] in INVENTORY_NAMES}
     previous = {row['name']: row for row in old['items']}
+    if len(previous) != len(old['items']):
+        raise ValueError('Duplicate installed component inventory')
     files = {}
-    for name in BINARY_NAMES:
-        row = rows[name]
-        if name not in previous or previous[name]['path'] != row['path']:
+    for name in INVENTORY_NAMES:
+        target = '/root/bin/'+name if name in ('zigmactl', 'zigma-time-sync') else BASE+'/'+name
+        kind = 'binary' if name in BINARY_NAMES else 'script'
+        row, before = rows.get(name, {}), previous.get(name, {})
+        if row.get('path') != target or row.get('kind') != kind or before.get('path') != target or before.get('kind') != kind:
             raise ValueError('Installed component inventory needs review: '+name)
-        source = 'tools/zigmactl' if name == 'zigmactl' else 'stack/'+name
-        files[row['path']] = full[source]
+        source = SCRIPT_FILES[target] if kind == 'script' else ('tools/zigmactl' if name == 'zigmactl' else 'stack/'+name)
+        files[target] = full[source]
+        if installer.digest(files[target][0]) != row['sha256']:
+            raise ValueError('Package component checksum mismatch: '+name)
+    for target, source in SCRIPT_FILES.items():
+        files[target] = full[source]
+    for name in TRANSPORT_FILES:
+        files[BASE+'/'+name] = full['stack/'+name]
     for name in WEB_NAMES:
         files[BASE+'/src/'+name] = full['stack/src/'+name]
     old['items'] = [rows.get(row['name'], row) for row in old['items']]
     files[BASE+'/release.json'] = ((json.dumps(old, indent=2)+'\n').encode(), 0o600)
     return files
+
+
+def verify_inventory(about, expected):
+    rows = {row['name']: row for row in about['items']}
+    for row in expected['items']:
+        if row['name'] not in INVENTORY_NAMES:
+            continue
+        actual = rows.get(row['name'], {})
+        if actual.get('sha256') != row['sha256'] or actual.get('status') != 'verified':
+            raise ValueError('About inventory not yet verified: '+row['name'])
 
 
 def upgrade(session=None):
@@ -275,7 +310,7 @@ def upgrade(session=None):
                                  'elif test ! -e '+q+'; then echo absent; else exit 1; fi; }')
         index = str(len(listing))
         if presence == 'absent':
-            if path not in {BASE+'/src/'+name for name in WEB_NAMES} | {TIMEZONE_INIT}:
+            if path not in {BASE+'/src/'+name for name in WEB_NAMES} | {TIMEZONE_INIT} | {BASE+'/'+name for name in TRANSPORT_FILES + LEGACY_HELPERS}:
                 raise ValueError('Required installed component is missing: '+path)
             previous_mode, previous_sha = '-', 'absent'
         elif presence == 'present':
@@ -295,7 +330,13 @@ def upgrade(session=None):
         changed[index] = gzip.compress(data, mtime=0)
         listing.append(f'{index} {path} {previous_mode} {mode:o} {previous_sha} {installer.digest(data)}')
     if not listing:
-        print('All binaries, web assets and boot timezone files already match this package. No robot files changed.')
+        # Refresh the last successful updater label even for a no-op upgrade.
+        # Its old contents are deliberately never read, compared or inventoried.
+        version = shlex.quote(installer.package_version())
+        robot.command('set -eu; t=$(mktemp '+BASE+'/.installer-version.XXXXXX); '
+                      "printf '%s\\n' "+version+' >"$t"; chmod 644 "$t"; '
+                      'mv -f "$t" '+BASE+'/installer-version.txt; sync')
+        print('Managed runtime already matches this package. Installer/updater label refreshed.')
         return
     manifest = '\n'.join(listing)+'\n'
     (directory/'files.list').write_text(manifest)
@@ -312,7 +353,8 @@ def upgrade(session=None):
         raise ValueError('Invalid staging directory')
     script = (Path(__file__).with_name('upgrade-transaction.sh')).read_bytes()
     (directory/'upgrade-transaction.sh').write_bytes(script)
-    assets = {'files.list': manifest.encode(), 'boot': (boot+'\n').encode(), 'transaction.sh': script}
+    assets = {'files.list': manifest.encode(), 'boot': (boot+'\n').encode(), 'transaction.sh': script,
+              'installer-version.txt': (installer.package_version()+'\n').encode()}
     assets.update({i+'.old.gz': data for i, data in backups.items()})
     assets.update({i+'.new.gz': data for i, data in changed.items()})
     started = False
@@ -345,6 +387,7 @@ def upgrade(session=None):
                     continue
                 (directory/'verified.json').write_text(json.dumps({'host': host, 'boot': boot, 'files': listing}, indent=2)+'\n')
                 print('Upgrade verified. Backups retained: '+str(directory))
+                print('Managed scripts are updated; resident coordinator code takes effect on its next start. No mode switch was requested.')
                 print('Boot timezone correction is installed. It takes full effect after the next robot reboot; no reboot was requested.')
                 return
             if state == 'ready':
@@ -354,10 +397,7 @@ def upgrade(session=None):
                                   BASE+'/zigma-core-arm --check-health /tmp/zigma-network/status.json --check-exe '+BASE+'/zigma-network-arm && /root/bin/zigmactl check-control')
                     idle(robot)
                     about = api(robot, 'about')
-                    rows = {row['name']: row for row in about['items']}
-                    expected = {row['name']: row for row in old['items'] if row['kind'] == 'binary'}
-                    if any(rows.get(n, {}).get('sha256') != row['sha256'] or rows[n].get('status') != 'verified' for n, row in expected.items()):
-                        raise ValueError('About inventory not yet verified')
+                    verify_inventory(about, old)
                     acceptance_attempted = True
                     robot.command('sh '+stage+'/transaction.sh '+stage+' accept', timeout=15)
                     for _ in range(15):
@@ -368,6 +408,7 @@ def upgrade(session=None):
                         raise RuntimeError('Acceptance completion not confirmed')
                     (directory/'verified.json').write_text(json.dumps({'host': host, 'boot': boot, 'files': listing}, indent=2)+'\n')
                     print('Upgrade verified. Backups retained: '+str(directory))
+                    print('Managed scripts are updated; resident coordinator code takes effect on its next start. No mode switch was requested.')
                     print('Boot timezone correction is installed. It takes full effect after the next robot reboot; no reboot was requested.')
                     return
                 except (paramiko.AuthenticationException, paramiko.BadHostKeyException):
