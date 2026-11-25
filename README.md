@@ -19,71 +19,19 @@ Daily cleaning schedules run on the robot's own clock, so they work even without
 The installer will be able to access and expose the SSH of your robots for these models, however the "Free-Zigma" app will depend on the status of the project.
 
 ### Fully compatible models
-- **Zigma Spark-980** - Tested in three different software variants (in which partition tables or even the way of handling the memory is different).
+- **Zigma Spark-980** - Working in four different known software variants and 2 different hardware (Issue 10) variants 
+- **Puron PR10** - Working in two different software variants (See Issue 03 and 01b)
+- **RoboJet X-One** - Working in one software variant (See Issue 08)
+- **OKAMI U100 Plus** - Working in one software variant (See Issue 09)
 
 ### Partially compatible models
-
-- **Puron PR10** - Currently under testing
-- **RoboJet X-One (Issue08)** - Exact-profile support, tested using its adapted firmware on Ciccia. Maps, map-derived position, settings, area commands and general no-go polygons are implemented; live LiDAR and navigation-memory pose are not enabled. See the [support matrix](hack/ROBOJET_ISSUE08_SUPPORT.md).
-
-- **OKAMI U100 Plus (Issue09)** - The reported original firmware is supported by the strict `okami-u100-plus-issue09-kernel23` profile. Full installation, native RoboJet v2 map import and map/zone persistence after reboot were verified using its adapted firmware on Ciccia. Original OKAMI hardware and physical cleaning still need owner validation. See [OKAMI support](hack/OKAMI_ISSUE09_SUPPORT.md).
+- None at this stage
 
 ### Potentially compatible models
-
 - **Redmond RV-R670S** - I need beta testers so please try the installer and report with an issue!
+- **RoboJet X-Style** - I need beta testers so please try the installer and report with an issue!
+- **Abir X8** - I need beta testers so please try the installer and report with an issue!
 - **Redmond RV-R650S** - It has not lidar but it should be possible to at least get a SSH terminal.
-
-## Firmware variants and RC18 findings
-
-RC18 adds the reported **OKAMI U100 Plus Issue09** firmware: kernel #23,
-six-partition overlay, original Wi-Fi/client components and the exact RoboJet
-app/navigation pair. Numeric device calibration is preserved. The same reviewed
-startup template covers the Ciccia test adaptation without replacing vendor
-executables. RC18 also fixes Full startup when optional Telegram transport files
-are omitted. All RC17 profiles and timezone migration remain included.
-
-Compatibility is selected by flash layout and exact component hashes, not by the
-model name alone. The **Issue10** direct kernel16 profile is included, with its
-reviewed startup scripts and existing Zigma navigation/app pair. Its original
-hardware installation and cold boot still need owner validation. Unknown or mixed
-components retain the installer fallback rather than inheriting another profile's
-permissions. See [firmware variants](hack/FIRMWARE_VARIANTS.md).
-
-RC17 also recognizes the Issue10 adaptation for Ciccia (`ciccia-issue10-kernel23`),
-alongside the original `ciccio-issue10-kernel16`. Both use strict component hashes;
-the adapted profile was checked against the prepared NOR. Original and adapted
-RoboJet profiles and Maps V1.18 deletion/reset remain included.
-
-Maps V1.18 enables guarded native RoboJet map deletion/reset after
-[offline protocol review](hack/ROBOJET_MAP_DELETE.md). Physical validation remains
-pending; this update is included in the regenerated RC17 archives.
-
-RC17 recognizes both the original Issue08 RoboJet (kernel #16) and its Ciccia
-adaptation (kernel #23), using separate exact component profiles. The original
-profile was checked against the received NOR; installation and cold boot on the
-original hardware still require owner validation. Issue10 support is preserved.
-
-RoboJet uses a different app-cache layout and `relo` v2 saved maps. RC16 includes
-the bounded v2 decoder, byte-preserving protected copies, map-derived robot
-coordinates, general no-go polygon editing, area commands, and area/time statistics
-(m² and minutes, converted to seconds in the API). Nonzero physical measurements
-are still needed to verify the statistics' scale. Navigation RAM and live LiDAR
-remain unavailable for this exact executable.
-
-Native restoration was verified with the same map and with a converted Caccamora
-map using another ID. Both imports returned native success and published their
-maps. The converted map's file and selected ID survived reboot, but a usable live
-map was not republished automatically. Full reload/localization and reliable
-restoration after standby therefore remain unvalidated. A queued request is not
-completion; keep protected backups and do not automatically repeat an uncertain
-operation. The conversion is a private test artifact, not a supported cross-model
-map converter. See [native map import and validation](hack/ROBOJET_MAP_IMPORT.md).
-
-RC17 also migrates existing installations to apply the web-selected timezone at
-the next boot, with verified backups and rollback of the two startup files.
-Already-running processes can retain their previous timezone until then. Every new
-firmware variant must be audited for timezone overrides; the RoboJet override must
-not be assumed to exist on other variants.
 
 ## Features
 
@@ -98,9 +46,11 @@ The web interface and control software run on the robot itself. The original nav
 ![Animated demo of the Zigma Free web interface](images/video_usage.gif)
 
 ## Zigma Spark-980 hardware
-During the investigation we used 3 different robots, the three of them with different versions and in at least one, a totally different linux partition (when the OS is different, I call them "variants"). This makes it particularly difficult because even if they use the same hardware, in some of the robots the internal NOR memory has a permanent flag applied that makes its linux kernel not compatible other robots.
+During the investigation I used 3 different robots, the three of them with different software versions and in at least one, a totally different linux partition (I call them "variants"). This makes it particularly difficult because even if they use the same hardware, in some of the robots the internal NOR memory has a permanent flag applied that makes its linux kernel not compatible other robots. We have also learnt (the hard way) that different variants can have different firmwares on the Chassis PCB and you can lose all controllability of the hardware if you put the incorrect firmware as it will not be able to command the MCU (AM380) properly from it main Linux processor (AM580)
 
 The robot has two main PCBs. The **AM580 main logic board** runs Linux, and the **AM380 chassis controller board** handles low-level chassis control.
+
+![Hardware connections between AM580, AM380, LiDAR and peripherals; GPIO in orange, UART in blue and SPI in purple](docs/hardware-connections.svg)
 
 - **Processor and RAM:** Amicro AM580 (`amicro,am580`). and 64 MiB of DRAM.
 - **Storage:** 32 MiB (256 Mbit) of Macronix SPI NOR flash, identified as MX25L25635F/MX25L25645G.
@@ -130,7 +80,7 @@ See [Instructions and troubleshooting](USAGE.md) for how to use your brand new r
 We started with the UART console. It let us watch the robot boot, but the factory debug server took over the serial port before we could get a shell. So we wired a Raspberry Pi Pico to the SPI flash, read the memory, and modified the writable partition to start the robot's built-in SSH server.
 
 Later, we worked out how to unlock the UART console and found an easier way to get SSH without opening the robot. The factory Wi-Fi pairing process could download and run a script from a computer on the local network. Once we had shell access, we captured the cloud command that deleted the robot's Wi-Fi settings. We called it the “auto-destruct” command.
-
+no 
 [How we hacked it](hack/HISTORY.md) tells the full story, from the wires on the bench to local control.
 
 ![Raspberry Pi Pico wired to the Spark-980 main logic board to read its SPI flash](images/zigma_NOR_Memory_dump_messy.jpg)
