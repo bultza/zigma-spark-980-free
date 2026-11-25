@@ -222,6 +222,7 @@ static bool tg_clean_report(cJSON *s,bool partial){
  else snprintf(message,sizeof message,"%s\nStatistics unavailable",title);
  if(tg_enqueue(message,tg_session)){
   int last=cJSON_GetArraySize(tg_queue)-1;cJSON *job=cJSON_GetArrayItem(tg_queue,last);setnum(job,"session_id",tg_session);setbool(job,"partial_report",partial);setnum(job,"finish_at",partial?0:num(s,"clean_finished_at",0));
+  if(stats){setnum(job,"clean_area_m2",area);setnum(job,"clean_time_s",seconds);}
   if(!tg_report_store(job)){job=cJSON_DetachItemFromArray(tg_queue,last);const char *photo=str(job,"photo","");if(*photo)unlink(photo);cJSON_Delete(job);snprintf(tg_result,sizeof tg_result,"Could not save cleaning report; will retry");return false;}
   if(!cJSON_IsTrue(get(tg_config,"enabled"))||!cJSON_IsTrue(get(tg_config,"finished"))){job=cJSON_DetachItemFromArray(tg_queue,last);const char *photo=str(job,"photo","");if(*photo)unlink(photo);cJSON_Delete(job);}
   return true;

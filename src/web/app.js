@@ -184,6 +184,7 @@ function renderStatus() {
  document.querySelector('.schedule-banner strong').textContent=`Robot local time · ${robotTimezone}`;document.querySelector('.schedule-time-row strong').textContent=robotTimezone;
  const paused=['paused','Pause'].includes(s.working_status),cleaning=['cleaning','AutoClean','PlanningRect'].includes(s.working_status),docked=['charging','PileCharging'].includes(s.working_status);
  $('primary-command-label').textContent=paused?'Resume cleaning':'Start cleaning';
+ $('clean-fan-power').disabled=app.busy||!app.connected||!s.capabilities.basic_control;
  $('primary-command').disabled=app.busy || !app.connected || !s.capabilities.basic_control || (s.fresh&&cleaning) || (s.fresh&&['returning','BackCharging'].includes(s.working_status));
  $('pause-command').disabled=app.busy || !app.connected || !s.capabilities.basic_control || (s.fresh&&!(cleaning || ['returning','BackCharging'].includes(s.working_status)));
  $('dock-command').disabled=app.busy || !app.connected || !s.capabilities.basic_control || (s.fresh&&docked);
@@ -195,9 +196,9 @@ function unit(text) { const el=document.createElement('small');el.textContent=te
 async function sendCommand(action,extra={}) {
  if(app.busy)return;app.busy=true;renderStatus();
  try { const result=await api('/api/commands',{method:'POST',body:JSON.stringify({action,...extra})});
-  app.pending=result.result==='simulated'||action==='set_forbidden'?null:{action,at:result.dispatched_at || sTime()};
+  if(action!=='setfan')app.pending=result.result==='simulated'||action==='set_forbidden'?null:{action,at:result.dispatched_at || sTime()};
   if(action==='area_clean'){app.activeArea={rect:{...extra.rect},context:extra.map_context,at:result.dispatched_at||sTime(),started:result.result==='simulated',locked:true};saveArea();setTool('pan');}
-  const message=result.result==='simulated'?'Done · simulated action':'Command dispatched. Waiting for robot feedback.';
+  const message=result.result==='simulated'?'Done · simulated action':action==='setfan'?'Fan power sent. Cleaning mode unchanged.':'Command dispatched. Waiting for robot feedback.';
   $('command-result').textContent=message;$('command-result').classList.remove('hidden');toast(message);
   await refresh();await loadEvents();return true;
  } catch(error) { $('command-result').textContent=error.message;$('command-result').classList.remove('hidden');showError(error);return false; } finally { app.busy=false;renderStatus(); }
@@ -229,11 +230,13 @@ async function loadCleaningReports() {
  for(const report of [...data.items].sort((a,b)=>String(b.started).localeCompare(String(a.started)))){
   const row=document.createElement('article');row.className='activity-row cleaning-report';
   const body=document.createElement('div');body.className='report-content';const heading=document.createElement('strong'),details=document.createElement('p');
-  const outcome={finished_reported:'Finish reported by robot',partial_reported:'Partial cleaning report',recorded_completion_unknown:'Cleaning record · completion unknown',conflicting_reports:'Conflicting cleaning records'}[report.outcome]||'Cleaning record';
+  const outcome={local_finish_reported:'Cleaning finished · local report',finished_reported:'Finish reported by robot',partial_reported:'Partial cleaning report',recorded_completion_unknown:'Cleaning record · completion unknown',conflicting_reports:'Conflicting cleaning records'}[report.outcome]||'Cleaning record';
   heading.textContent=outcome;
-  const units=app.status?.area_unit==='ft2';const stats=Number.isFinite(report.clean_area_m2)&&Number.isFinite(report.clean_time_s)?`${(report.clean_area_m2*(units?10.7639104:1)).toFixed(1)} ${units?'ft²':'m²'} · ${(report.clean_time_s/60).toFixed(0)} min`:'Statistics unavailable';
+  const units=app.status?.area_unit==='ft2';const stats=Number.isFinite(report.clean_area_m2)&&Number.isFinite(report.clean_time_s)?`${(report.clean_area_m2*(units?10.7639104:1)).toFixed(1)} ${units?'ft²':'m²'} · ${(report.clean_time_s/60).toFixed(0)} min`:report.source==='local_report'&&report.summary?'Statistics in saved report':'Statistics unavailable';
   details.textContent=`${report.started} → ${report.ended} · ${stats}${report.time_basis==='native_local_time_timezone_unknown'?' · Robot local time; timezone unknown':''}`;
-  body.append(heading,details);row.append(body);host.append(row);
+  body.append(heading,details);
+  if(report.source==='local_report'&&report.summary){const summary=document.createElement('p');summary.textContent=report.summary;body.append(summary);}
+  row.append(body);host.append(row);
   if(report.map_available){
    const button=document.createElement('button');button.className='secondary-button';button.textContent='View cleaning map';body.append(button);
    button.addEventListener('click',async()=>{button.disabled=true;try{
@@ -479,6 +482,7 @@ $('cancel-selection').addEventListener('click',()=>{app.selection=null;renderSel
 $('map-view').addEventListener('change',()=>{$('map-coordinates').textContent='X: —  Y: —';app.mapView=$('map-view').value;laserSchedule();app.detailMap=null;app.detailError='';app.view={zoom:1,panX:0,panY:0};setTool('pan');renderStatus();renderZones();drawMap();if(app.mapView==='detailed')loadDetailedMap();});
 $('reset-map').addEventListener('click',()=>{app.view={zoom:1,panX:0,panY:0};drawMap();});
 $('zoom-in').addEventListener('click',()=>{app.view.zoom=Math.min(4,app.view.zoom*1.2);drawMap();});$('zoom-out').addEventListener('click',()=>{app.view.zoom=Math.max(.65,app.view.zoom/1.2);drawMap();});
+$('clean-fan-power').addEventListener('change',()=>sendCommand('setfan',{fan_power:Number($('clean-fan-power').value)}));
 $('primary-command').addEventListener('click',()=>sendCommand(['paused','Pause'].includes(app.status?.working_status)?'resume':'clean',{fan_power:Number($('clean-fan-power').value)}));
 $('pause-command').addEventListener('click',()=>sendCommand('pause'));$('dock-command').addEventListener('click',()=>sendCommand('dock'));
 $('go-schedules').addEventListener('click',()=>changePage('schedules'));$('go-activity').addEventListener('click',()=>changePage('activity'));

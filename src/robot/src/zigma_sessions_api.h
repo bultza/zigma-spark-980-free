@@ -21,11 +21,33 @@ static cJSON *sessions_catalog(void){
  if(!cached||signature!=previous){cJSON *next=zs_catalog(core_records_dir);if(!next)return NULL;cJSON_Delete(cached);cached=next;previous=signature;}
  return cJSON_Duplicate(cached,1);
 }
+/* Local snapshots supplement native history; never masquerade as native records. */
+static void sessions_local(cJSON *catalog){
+ char file[1024];path(file,sizeof file,"cleaning-reports.json");cJSON *all=tg_read(file,512*1024),*report;
+ cJSON_ArrayForEach(report,all){
+  time_t end=num(report,"finish_at",0);if(end<=0)end=num(report,"created",0);
+  time_t start=num(report,"session_id",0);if(start<=0)start=end;
+  if(end<=0||start>end)continue;
+  char a[32],b[32];struct tm tm;if(!localtime_r(&start,&tm))continue;strftime(a,sizeof a,"%Y-%m-%d %H:%M",&tm);
+  if(!localtime_r(&end,&tm))continue;
+  strftime(b,sizeof b,"%Y-%m-%d %H:%M",&tm);
+  bool duplicate=false;cJSON *native;cJSON_ArrayForEach(native,get(catalog,"items"))if(!strcmp(str(native,"started",""),a)&&!strcmp(str(native,"ended",""),b)){duplicate=true;break;}
+  if(duplicate)continue;
+  cJSON *row=cJSON_CreateObject(),*key=cJSON_CreateObject();setnum(key,"local_session",start);char id[65];zs_digest(key,id);cJSON_Delete(key);
+  setstr(row,"id",id);setstr(row,"source","local_report");setstr(row,"started",a);setstr(row,"ended",b);setstr(row,"time_basis","robot_local_time");
+  setstr(row,"outcome",cJSON_IsTrue(get(report,"partial_report"))?"partial_reported":"local_finish_reported");setstr(row,"summary",str(report,"text",""));setbool(row,"map_available",false);
+  const char *fields[]={"clean_area_m2","clean_time_s",NULL};for(int i=0;fields[i];i++)if(cJSON_IsNumber(get(report,fields[i])))setnum(row,fields[i],get(report,fields[i])->valuedouble);
+  cJSON_AddItemToArray(get(catalog,"items"),row);
+ }
+ if(cJSON_GetArraySize(get(catalog,"items")))setbool(catalog,"available",true);
+ cJSON_Delete(all);
+}
 static bool sessions_api(int fd,const char *method,const char *url){
  if(strcmp(method,"GET")||strncmp(url,"/api/sessions",13))return false;
  cJSON *catalog=sessions_catalog();
  if(!catalog){catalog=cJSON_CreateObject();cJSON_AddArrayToObject(catalog,"items");cJSON_AddBoolToObject(catalog,"available",false);}
  else cJSON_AddBoolToObject(catalog,"available",true);
+ sessions_local(catalog);
  if(!strcmp(url,"/api/sessions")){json_response(fd,200,catalog);return true;}
  const char *suffix=url+13;char id[65]={0};size_t length=strlen(suffix);
  if(suffix[0]!='/'||(length!=65&&length!=69)){cJSON_Delete(catalog);error_response(fd,404,"Cleaning report not found");return true;}

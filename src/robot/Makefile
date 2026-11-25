@@ -114,3 +114,15 @@ test-release:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) -DNOR_EMBED tests/test_release.c src/zigma_nor_backup.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-release
 	build/tests/test-release
+
+.PHONY: test-web-fan
+test-web-fan:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) -DNOR_EMBED tests/test_web_fan.c src/zigma_nor_backup.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-web-fan
+	build/tests/test-web-fan
+
+.PHONY: test-report-history
+test-report-history:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) -DNOR_EMBED tests/test_report_history.c src/zigma_nor_backup.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-report-history
+	build/tests/test-report-history

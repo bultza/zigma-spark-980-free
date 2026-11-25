@@ -357,6 +357,17 @@ static bool issue_zones(cJSON *body,char *err,size_t cap){
 }
 
 static bool issue(const char *action,cJSON *body,char *err,size_t cap) {
+ /* Fan-only requests must never enter the clean/resume state machine. */
+ if(!strcmp(action,"setfan")){
+  int power=fan_power(body);
+  if(!get(body,"fan_power")||!power){snprintf(err,cap,"Fan power must be 1, 2 or 3");return false;}
+  if(strcmp(mode,"demo")){
+   if(!control_bin){snprintf(err,cap,"Fan control is unavailable");return false;}
+   char level[2]={(char)('0'+power),0};char *args[]={(char*)control_bin,"setfan",level,NULL};
+   if(run_process(args,NULL,0)){snprintf(err,cap,"Fan command failed or timed out; not retried");return false;}
+  }
+  event("command","Fan power dispatched without starting or resuming cleaning");return true;
+ }
  bool cleaning=!strcmp(action,"clean")||!strcmp(action,"resume");
  int power=fan_power(body);if(cleaning&&!power){snprintf(err,cap,"Fan power must be 1, 2 or 3");return false;}
  if(reset_waiting()&&(!strcmp(action,"area_clean")||!strcmp(action,"set_forbidden"))){snprintf(err,cap,"Waiting for a new map after clear request; geometry commands are blocked");return false;}
@@ -929,6 +940,8 @@ int main(int argc,char **argv){
  migrate_event_language();
  cJSON *initial_settings=settings_json();cJSON_Delete(initial_settings);
  char err[200];if(!sync_cron(err,sizeof(err))){fprintf(stderr,"Cron: %s\n",err);setbool(state,"cron_applied",false);}else setbool(state,"cron_applied",cron_dir!=NULL);if(!save_state())fatal("state");
+ /* Import the last legacy report once, without sending a notification. */
+ char legacy_report[1024];path(legacy_report,sizeof legacy_report,"telegram-report.json");cJSON *legacy=tg_read(legacy_report,4096);if(legacy&&!report_archive(legacy))fprintf(stderr,"Could not archive legacy cleaning report\n");cJSON_Delete(legacy);
  signal(SIGINT,stop);signal(SIGTERM,stop);signal(SIGPIPE,SIG_IGN);listener=socket(AF_INET,SOCK_STREAM|SOCK_CLOEXEC,0);if(listener<0)fatal("socket");int one=1;setsockopt(listener,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(one));struct sockaddr_in a={.sin_family=AF_INET,.sin_port=htons((unsigned short)port)};if(inet_pton(AF_INET,bind_ip,&a.sin_addr)!=1){fprintf(stderr,"IPv4 listen address required\n");return 2;}
  if(bind(listener,(struct sockaddr*)&a,sizeof(a))||listen(listener,8))fatal("listen");
  printf("Zigma Free · %s · %s\nhttp://%s:%d\n",robot,mode,bind_ip,port);fflush(stdout);

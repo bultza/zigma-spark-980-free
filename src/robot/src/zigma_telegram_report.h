@@ -1,3 +1,16 @@
+/* Metadata-only archive: bounded flash usage, independent of Telegram delivery.
+ * Repeated persistence of the same session replaces its snapshot. */
+static bool report_archive(cJSON *report){
+ double id=num(report,"session_id",0);if(id<=0)id=num(report,"created",0);if(id<=0)return false;
+ char file[1024];path(file,sizeof file,"cleaning-reports.json");cJSON *all=tg_read(file,512*1024);
+ if(!all)all=cJSON_CreateArray();
+ if(!cJSON_IsArray(all)){cJSON_Delete(all);return false;}
+ cJSON *entry;int index=0;cJSON_ArrayForEach(entry,all){double prior=num(entry,"session_id",0);if(prior<=0)prior=num(entry,"created",0);if(prior==id)break;index++;}
+ if(entry&&cJSON_Compare(entry,report,1)){cJSON_Delete(all);return true;}
+ if(entry)cJSON_ReplaceItemInArray(all,index,cJSON_Duplicate(report,1));else cJSON_AddItemToArray(all,cJSON_Duplicate(report,1));
+ while(cJSON_GetArraySize(all)>256)cJSON_DeleteItemFromArray(all,0);
+ char *json=cJSON_PrintUnformatted(all);bool ok=json&&atomic_write(file,json);free(json);cJSON_Delete(all);return ok;
+}
 /* Keep only the latest generated report. Alternate image slots so a failed
  * metadata commit never pairs an old caption with a newer cleaning map. */
 static bool tg_report_store(cJSON *job){
@@ -7,9 +20,10 @@ static bool tg_report_store(cJSON *job){
  char basename[40];snprintf(basename,sizeof basename,"telegram-report-%d.png",slot);path(photo,sizeof photo,basename);
  cJSON *report=cJSON_CreateObject();setstr(report,"text",str(job,"text",""));setnum(report,"created",num(job,"created",time(NULL)));setnum(report,"slot",slot);setnum(report,"session_id",num(job,"session_id",0));setbool(report,"partial_report",cJSON_IsTrue(get(job,"partial_report")));
  setnum(report,"finish_at",num(job,"finish_at",0));
+ const char *fields[]={"clean_area_m2","clean_time_s",NULL};for(int i=0;fields[i];i++)if(cJSON_IsNumber(get(job,fields[i])))setnum(report,fields[i],get(job,fields[i])->valuedouble);
  size_t size=0;unsigned char *bytes=binary_read(str(job,"photo",""),4*1024*1024,&size);
  bool image=bytes&&binary_write(photo,bytes,size,false);free(bytes);setbool(report,"image",image);
- char *json=cJSON_PrintUnformatted(report);bool ok=json&&atomic_write(meta,json);free(json);cJSON_Delete(report);
+ char *json=cJSON_PrintUnformatted(report);bool ok=json&&atomic_write(meta,json);free(json);if(ok)ok=report_archive(report);cJSON_Delete(report);
  if(ok){snprintf(basename,sizeof basename,"telegram-report-%d.png",1-slot);path(photo,sizeof photo,basename);unlink(photo);}
  return ok;
 }
