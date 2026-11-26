@@ -128,9 +128,15 @@ static int reboot_robot(void)
 }
 
 #include "zigmactl_status.h"
+#include "zigmactl_wake.h"
 
-int main(int argc, char **argv)
+static int ctl_dispatch(int argc, char **argv)
 {
+    if(argc>=2&&!strcmp(argv[1],"wake")){
+        if(argc==2)return ctl_wake(false);
+        if(argc==3&&!strcmp(argv[2],"--check"))return ctl_wake(true);
+        fprintf(stderr,"Usage: zigmactl wake [--check]\n");return 2;
+    }
     if (zigma_version_only(argc, argv, "zigmactl")) return 0;
     if (argc==2 && !strcmp(argv[1], "check-control")) return check_control();
     if(argc>=2&&!strcmp(argv[1],"status")){
@@ -158,7 +164,7 @@ int main(int argc, char **argv)
     }
     if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[1], "clean") && strcmp(argv[1], "resume") && strcmp(argv[1], "setfan"))) {
         fprintf(stderr,
-                "Usage: %s {status [--json]|check-control|clean [1-3]|resume [1-3]|setfan 1-3|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
+                "Usage: %s {status [--json]|check-control|wake [--check]|clean [1-3]|resume [1-3]|setfan 1-3|pause|dock|reboot|goto x y|gotoblock x y [timeout_s]|dockblock [timeout_s]|getvolume|setvolume 0-100}\n",
                 argv[0]);
         return 1;
     }
@@ -205,4 +211,18 @@ int main(int argc, char **argv)
 
     fprintf(stderr, "Unknown command: %s\n", argv[1]);
     return 1;
+}
+
+/* Share the navigation lock with wake. Emergency pause remains available. */
+int main(int argc, char **argv)
+{
+    int lock=-1;
+    if(argc>=2 && (!strcmp(argv[1],"clean")||!strcmp(argv[1],"resume")||
+       !strcmp(argv[1],"setfan")||!strcmp(argv[1],"dock")||!strcmp(argv[1],"reboot"))) {
+        lock=wake_lock();
+        if(lock<0){fprintf(stderr,"Another control operation is running\n");return 6;}
+    }
+    int rc=ctl_dispatch(argc,argv);
+    if(lock>=0)close(lock);
+    return rc;
 }

@@ -126,3 +126,10 @@ test-report-history:
 	mkdir -p build/tests
 	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) -DNOR_EMBED tests/test_report_history.c src/zigma_nor_backup.c $(CJSON) $(CRYPTO) -lm -o build/tests/test-report-history
 	build/tests/test-report-history
+
+.PHONY: test-wake
+test-wake:
+	mkdir -p build/tests
+	$(HOST_CC) $(CPPFLAGS) $(CFLAGS) tests/test_wake.c $(CJSON) -lm -o build/tests/test-wake
+	build/tests/test-wake
+	python3 tests/test_wake_process.py
