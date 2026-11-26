@@ -25,12 +25,11 @@ The installer will be able to access and expose the SSH of your robots for these
 - **OKAMI U100 Plus** - Working in one software variant (See Issue 09)
 
 ### Partially compatible models
-- None at this stage
+- **Abir X8** - I need beta testers so please try the installer and report with an issue! (See Issue 12)
 
 ### Potentially compatible models
 - **Redmond RV-R670S** - I need beta testers so please try the installer and report with an issue!
 - **RoboJet X-Style** - I need beta testers so please try the installer and report with an issue!
-- **Abir X8** - I need beta testers so please try the installer and report with an issue!
 - **Redmond RV-R650S** - It has not lidar but it should be possible to at least get a SSH terminal.
 
 ## Features
