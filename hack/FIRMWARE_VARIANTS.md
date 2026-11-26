@@ -109,3 +109,28 @@ is separate from offline recognition. No firmware files are replaced by detectio
 ## Issue 09: OKAMI U100 Plus
 
 RC18 includes `okami-u100-plus-issue09-kernel23` for the received original firmware on the Ciccia kernel23 overlay base. Twenty required component checks include the exact RoboJet pair and original client/driver/startup scripts. The reviewed navigation template preserves numeric device calibration and also covers the Ciccia adaptation. Full installation and native v2 map persistence after reboot passed on Ciccia; original OKAMI hardware and physical cleaning remain unvalidated. See [profile and validation](OKAMI_ISSUE09_SUPPORT.md).
+
+## Issue 12: ABIR X8
+
+`abir-x8-issue12-kernel20` is a strict component profile on the Ciccio
+direct kernel20 base. It uses the existing RoboJet/OKAMI app/navigation
+adapters with `ygclient` ce73b4c0, daemon 4e14e540, and the supplied ABIR
+startup scripts and Wi-Fi components. It permits Tools/Full when all
+required component hashes match. Numeric calibration exports in S51hoslam
+may differ under the reviewed template; scripts and calibration are not replaced.
+
+Evidence comes from Forfoxy's sanitized package in [issue 12](https://github.com/bultza/zigma-spark-980-free/issues/12),
+whose base partitions match Ciccio byte for byte. The writable partition was
+erased in the supplied NOR and reconstructed privately from its separate
+filesystem archive, with authorized donor/default files. Those donor factory
+files and synthetic identity are not catalogue requirements or distributed
+installer payloads. The profile hashes were checked against the reconstructed
+files and supplied base; ygclient was recovered by its declared exact hash.
+
+Bounded boot and native pairing AP/DHCP/HTTP passed in the adapted QEMU lab
+(Ciccia kernel23, adapted DTB, hwsim and recorded MCU events). This does not
+validate the original kernel20, physical ABIR, Full activation or upgrade.
+Forfoxy's RC10 modifications, including pose/LiDAR and queue handling, are not
+imported by this catalogue addition. Existing map-only navigation limitations
+remain. Offline/local serial timezone is Asia/Shanghai; effective product
+scheduling after installation remains untested.

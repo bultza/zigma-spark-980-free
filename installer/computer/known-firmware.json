@@ -42,6 +42,38 @@
           },
           "note": "Puron app-server adapters with original navigation verified on Caccamora."
         }
+      ],
+      "component_profiles": [
+        {
+          "name": "abir-x8-issue12-kernel20",
+          "files": {
+            "/dev/mtd1": "c8189701d5e4959d7f2c2e812e655d998cf06dd6988112e7483fdd8636ec82c4",
+            "/dev/mtd2": "b23dbe53462d4fa306d1e261c1a6909ce4787873d169bf01a7fe9064cde8da12",
+            "/dev/mtd3": "48345cb4721ed905ad2e9613730e9b38088d14156ea83a15eb99b09816194243",
+            "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+            "/bin/busybox": "101dbf222f6ba88368242e9ce8f83ea90aa3b114772ac3ab70bb0a71c73cbccf",
+            "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+            "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+            "/root/yg/ygclient": "ce73b4c04b012c7ea57d0e46b8bacd20ab4110596093205fa62cce86b5c77d39",
+            "/root/app_server/daemon": "4e14e5402705225964c977ce3b93b3fed0f0dcaab50f07767dc66cb468897177",
+            "/root/app_server/wifi_app_server_grit": "8e323cfe110e4aa78d680b34c6c26a4276ada7869d58f49de64c0440fa551f6c",
+            "/root/hoslam/demo_rplidar": "f793e93abb85a1a7b1cbe8cec1f53b2c6d9aac7c21c8fb3b956f460fe693f88c",
+            "/root/bin/wpa_supplicant": "f1c4e8601aca30983458b432bdaee106c17eb51b6af68b1ec4a613f59ccb7752",
+            "/root/modules/8189fs.ko": "04eb388d14a53145c7b00790519f084d472b1fee87811c8313b6bc418b9fe208",
+            "/root/lib/libnl.so.1": "9ab8d584e5f3205f24dcaaed049a562183801741f22206650df5d43f3611cb53",
+            "/root/bin/hold380": "8a5a2538c5b21b6916867b2ea4173d45b2a1d9fafbcc16e1f66eb37f7f536e58",
+            "/root/etc/init.d/S70yg": "1c7b3f64b4866358f4b2676b8ec05cd4d0c5e2d7e99544d343edfa1abc362e66",
+            "/root/etc/init.d/S99daemon": "c498883ebe9899479c2117f7594d3e11fcb07bf872d59dad5d40f7f7adc9795e",
+            "/root/etc/init.d/S50app": "d1cb4da37406e17ca3f5bc67c97bac1ba146efe8007e2955521c36da811a0547",
+            "/root/etc/init.d/S51hoslam": "6849b146f24fa79180a50aa41c78b50f2315a094a30d5d07864cea82ed13f944",
+            "/root/etc/init.d/S60wifi": "5cf0aa6cceea02072b2c14884391372868c220caa230ecfb911455aa051d5af5",
+            "/root/bin/wpa_cli": "0d58624f8745381405e98b159b15154b77fe8155e98e592647140e9112228abe",
+            "/root/bin/hostapd": "63e649d3b10485ec9f30607871a33b95fe3277c5884e62031f2d8ba5ce88e7da",
+            "/root/etc/udhcpc.script": "7f9428aae1e5f35592b21e418c3d366cc91c7c6e58e07a02771d929f1a0f8a7a"
+          },
+          "navigation_calibration_template_sha256": "317847c0c71912c8db075a1af2bf22e61632768507c8a978243a9bfdbab73306",
+          "note": "ABIR X8 Issue12 direct kernel20 with the exact RoboJet app/navigation pair and ABIR startup/Wi-Fi files. Preserve device-specific numeric navigation calibration. Reconstructed image boot and pairing AP verified with QEMU lab adapters; Full activation, upgrade and original ABIR hardware remain unverified. Forfoxy RC10 patches are not included."
+        }
       ]
     },
     "ciccia-original-kernel23": {

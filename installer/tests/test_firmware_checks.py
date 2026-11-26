@@ -45,6 +45,32 @@ class FirmwareChecks(unittest.TestCase):
         outcome = next(line for line in result.stdout.splitlines() if line.startswith('RESULT:'))
         return outcome, result.stdout + result.stderr
 
+    def test_abir_profile_strict_components(self):
+        cp = next(p for p in CATALOG['variants'][BASE]['component_profiles']
+                  if p['name'] == 'abir-x8-issue12-kernel20')
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(changed=cp['files'], requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/root/bin:/root/lib:/lib:/usr/lib')
+            self.assertIn('Firmware recognized: abir-x8-issue12-kernel20', output)
+        for path in cp['files']:
+            for value in (None, 'a'*64):
+                changed = dict(cp['files']); changed[path] = value
+                with self.subTest(path=path, value=value):
+                    self.assertTrue(self.run_checks(changed=changed)[0].startswith('RESULT:ssh:1:'))
+
+    def test_abir_extension_preserves_existing_profiles(self):
+        old = copy.deepcopy(CATALOG)
+        old['variants'][BASE].pop('component_profiles')
+        for base, variant in old['variants'].items():
+            cases = [{}] + [p['files'] for p in variant.get('native_pairs', [])]
+            cases += [p['files'] for p in variant.get('component_profiles', [])]
+            for case in cases:
+                for mutation in ({}, {APP: 'a'*64}, {NAV: None}):
+                    changed = dict(case); changed.update(mutation)
+                    with self.subTest(base=base, mutation=mutation):
+                        self.assertEqual(self.run_checks(base, changed=changed, catalog=old)[0],
+                                         self.run_checks(base, changed=changed)[0])
+
     def test_issue10_full_and_strict_components(self):
         base = 'direct-kernel16'
         cp = CATALOG['variants'][base]['component_profiles'][0]
