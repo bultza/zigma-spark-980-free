@@ -42,7 +42,7 @@ int zigma_nor_main(int argc,char **argv){
   sizes[count]=size;erase[count]=er;strcpy(names[count],name);count++;
  }fclose(f);
  const unsigned direct[]={0x100000,0x10000,0x300000,0x600000,0x15f0000};
- const unsigned overlay[]={0x50000,0x10000,0x300000,0x800000,0x4a0000,0x1000000};
+ const unsigned overlay[]={0x50000,0x10000,0x300000,0x400000,0x4a0000,0x1400000};
  const char *expected[]={"uboot","dtb","kernel","rootfs","data","firmware"};
  if(!((count==5&&!memcmp(sizes,direct,sizeof direct))||(count==6&&!memcmp(sizes,overlay,sizeof overlay))))fail("unreviewed NOR geometry; SSH remains available");
  for(unsigned i=0;i<count;i++){
