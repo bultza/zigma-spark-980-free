@@ -179,6 +179,13 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
                 or not all(re.fullmatch(path_pattern, path) for path in wifi_libs.split(':'))
                 or wifi_bin + '/wpa_supplicant' not in files):
             raise ValueError('Invalid firmware profile')
+        # A base profile may carry its own navigation template when its exact
+        # app/navigation pair is part of the base (no separate component).
+        base_calibration = variant.get('navigation_calibration_template_sha256', '')
+        if base_calibration and (not isinstance(base_calibration, str)
+                                 or not re.fullmatch(r'[a-f0-9]{64}', base_calibration)
+                                 or '/root/etc/init.d/S51hoslam' not in files):
+            raise ValueError('Invalid navigation calibration template')
         selector = f"{layout}:{files['/dev/mtd2']}:{files['/dev/mtd3']}"
         if selector in selectors:
             raise ValueError('Duplicate firmware profile selector')
@@ -241,6 +248,8 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
                 lines += ['ZIGMA_COMPONENT_FIRMWARE', '  firmware_strict=0', '  firmware_calibration_template=',
                           '  echo ' + shlex.quote('Firmware NOTE: ' + note), '  ;;']
             lines += [' *)']
+        if base_calibration:
+            lines += [' firmware_calibration_template=' + shlex.quote(base_calibration)]
         lines += [" verify_firmware_files <<'ZIGMA_REVIEWED_FIRMWARE'"]
         pairs = variant.get('native_pairs', [])
         if not isinstance(pairs, list):
@@ -250,6 +259,8 @@ case "$layout:${kernel_sha:-}:${rootfs_sha:-}" in"""]
         lines.extend(f'{digest} {path}' for path, digest in files.items()
                      if not pairs or path not in native_paths)
         lines += ['ZIGMA_REVIEWED_FIRMWARE']
+        if base_calibration:
+            lines += [' firmware_calibration_template=']
         if pairs:
             original = ':'.join(files[path] for path in native_paths)
             seen = {original}

@@ -223,6 +223,7 @@ layout=$(awk 'NR>1 {gsub(/"/,"",$4); printf "%s:%s;",$4,$2}' /proc/mtd)
 case "$layout" in
  'uboot:00100000;dtb:00010000;kernel:00300000;rootfs:00600000;data:015f0000;') layout=direct;;
  'uboot:00050000;dtb:00010000;kernel:00300000;rootfs:00800000;data:004a0000;firmware:01000000;') layout=overlay;;
+ 'uboot:00050000;dtb:00010000;kernel:00300000;rootfs:00400000;data:004a0000;firmware:01400000;') layout=overlay;;
  *) exit 1;;
 esac
 ''' + checks + '\ntest "$firmware_bad" = 0\n'
