@@ -197,7 +197,7 @@
         }
       ]
     },
-    "spark980-sdk4556-overlay20": {
+    "spark980-fw4556-overlay20": {
       "layout": "overlay",
       "wifi_bin": "/root/bin",
       "wifi_libs": "/root/lib:/lib:/usr/lib",
@@ -225,7 +225,7 @@
         "/root/etc/init.d/S60wifi": "caec448ba14a2849218f900e6dbca87000e7a6ce79e2b3253ee251c9644a450f"
       },
       "navigation_calibration_template_sha256": "ae34c42ee68144c45f72cbb5fda55df743ce6ace2736328d3f7c6fcc390d9e9b",
-      "note": "Spark 980 / X8 SDK 4.5.56 (fwversion 4.5.56, kernel 4.14.14 #34). Overlay layout with 4 MiB rootfs and 20 MiB firmware. Issue04/Issue06 Russian app/navigation pair with RTL8723DS; daemon, libnl and startup scripts differ from issue04-russian-original. Hashes from a verified NOR dump; S51hoslam numeric calibration is device-specific."
+      "note": "Spark 980 / X8 firmware 4.5.56 (SDK 4.5.49 per OTA image name, kernel 4.14.14 #34). Overlay layout with 4 MiB rootfs and 20 MiB firmware. Issue04/Issue06 Russian app/navigation pair with RTL8723DS; daemon, libnl and startup scripts differ from issue04-russian-original. Hashes from a verified NOR dump; S51hoslam numeric calibration is device-specific."
     },
     "direct-kernel16": {
       "layout": "direct",

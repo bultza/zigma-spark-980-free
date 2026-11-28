@@ -43,10 +43,10 @@ int zigma_nor_main(int argc,char **argv){
  }fclose(f);
  const unsigned direct[]={0x100000,0x10000,0x300000,0x600000,0x15f0000};
  const unsigned overlay[]={0x50000,0x10000,0x300000,0x800000,0x4a0000,0x1000000};
- /* SDK 4.5.56: same overlay scheme, rootfs shrunk to 4 MiB and firmware grown to 20 MiB. */
- const unsigned overlay_sdk4556[]={0x50000,0x10000,0x300000,0x400000,0x4a0000,0x1400000};
+ /* Firmware 4.5.56: same overlay scheme, rootfs shrunk to 4 MiB and firmware grown to 20 MiB. */
+ const unsigned overlay_fw4556[]={0x50000,0x10000,0x300000,0x400000,0x4a0000,0x1400000};
  const char *expected[]={"uboot","dtb","kernel","rootfs","data","firmware"};
- if(!((count==5&&!memcmp(sizes,direct,sizeof direct))||(count==6&&(!memcmp(sizes,overlay,sizeof overlay)||!memcmp(sizes,overlay_sdk4556,sizeof overlay_sdk4556)))))fail("unreviewed NOR geometry; SSH remains available");
+ if(!((count==5&&!memcmp(sizes,direct,sizeof direct))||(count==6&&(!memcmp(sizes,overlay,sizeof overlay)||!memcmp(sizes,overlay_fw4556,sizeof overlay_fw4556)))))fail("unreviewed NOR geometry; SSH remains available");
  for(unsigned i=0;i<count;i++){
   if(strcmp(names[i],expected[i])||erase[i]!=BLOCK)fail("unreviewed partition name/erase size");
   char p[512];

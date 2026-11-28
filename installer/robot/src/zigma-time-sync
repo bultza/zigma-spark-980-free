@@ -17,7 +17,7 @@ esac
 server=time.google.com
 [ ! -f /root/etc/ntp-server ] || server=$(cat /root/etc/ntp-server)
 case "$server" in ''|-*|*[!a-zA-Z0-9.-]*) exit 2;; esac
-# Original firmware: /usr/bin; SDK 4.5.56: /root/bin (firmware partition).
+# Original firmware: /usr/bin; firmware 4.5.56: /root/bin (firmware partition).
 ntpdate=/usr/bin/ntpdate
 [ -x "$ntpdate" ] || ntpdate=/root/bin/ntpdate
 [ -x "$ntpdate" ] || { printf failed > /tmp/zigma-time-sync.result; exit 1; }

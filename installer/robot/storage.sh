@@ -1,7 +1,7 @@
 #!/bin/sh
 # S02zigma-storage V1.1 (modular installer adapter)
 # Storage adapter for the reviewed 32 MiB overlay layouts: 8 MiB rootfs +
-# 16 MiB firmware (original), or 4 MiB rootfs + 20 MiB firmware (SDK 4.5.56).
+# 16 MiB firmware (original), or 4 MiB rootfs + 20 MiB firmware (firmware 4.5.56).
 set -eu
 case "${1:-}" in start) :;;stop) exit 0;;*) exit 2;;esac
 test "$(cat /sys/class/mtd/mtd3/name)" = rootfs

@@ -328,9 +328,9 @@ Service V1.11 passes Telegram transport paths only when both optional files are 
 
 Physical validation (2026-11-24): on Ciccia with the reviewed OKAMI adaptation, Full installation and authenticated web/local-mode acceptance passed; 450 deployed stack/tool hashes and unchanged native calibration were verified. A subsequent native MAP_11 import and coordinated reboot preserved the active map, live publication and three no-go polygons. SSH/web and selected timezone in native app/navigation/cron were verified after reboot. No movement was requested; original OKAMI hardware and physical cleaning remain unvalidated. Installer suite: 115 tests pass.
 
-## Spark 980 SDK 4.5.56 overlay (4 MiB rootfs, 20 MiB firmware)
+## Spark 980 firmware 4.5.56 overlay (4 MiB rootfs, 20 MiB firmware)
 
-`spark980-sdk4556-overlay20` is a separate overlay base for robots reporting `fwversion` 4.5.56 (kernel 4.14.14 #34). The six-partition geometry differs from original Ciccia only in rootfs (`0x400000`) and firmware (`0x1400000`). Boot uses the same `init-overlay.sh` scheme, with mtdblock4 as the overlay upper and mtdblock5 at `/root/firmware/arobot`. Detection, the upgrade gate, the NOR reader and `S02zigma-storage` therefore accept this geometry as `overlay`, and the stack lives under `/root/firmware/arobot/zigma-free` as before.
+`spark980-fw4556-overlay20` is a separate overlay base for robots reporting `fwversion` 4.5.56 (kernel 4.14.14 #34). The six-partition geometry differs from original Ciccia only in rootfs (`0x400000`) and firmware (`0x1400000`). Boot uses the same `init-overlay.sh` scheme, with mtdblock4 as the overlay upper and mtdblock5 at `/root/firmware/arobot`. Detection, the upgrade gate, the NOR reader and `S02zigma-storage` therefore accept this geometry as `overlay`, and the stack lives under `/root/firmware/arobot/zigma-free` as before.
 
 The app/navigation pair (`8084000b…`/`1b2751ef…`), ygclient, RTL8723DS module, wpa_supplicant and S35prepare/S60wifi match `issue04-russian-original` (issues #4/#6). The daemon, libnl, S50app, S70yg, S99daemon and S51hoslam differ, and every file is pinned to the exact hash read from a verified NOR dump. Base profiles can now carry `navigation_calibration_template_sha256`, so S51hoslam accepts device-specific numeric calibration only. The original Ciccia profiles are unchanged.
 

@@ -451,8 +451,8 @@ class FirmwareChecks(unittest.TestCase):
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 installer.firmware_checks(c)
 
-    def test_sdk4556_overlay20_exact_base(self):
-        name = 'spark980-sdk4556-overlay20'
+    def test_fw4556_overlay20_exact_base(self):
+        name = 'spark980-fw4556-overlay20'
         variant = CATALOG['variants'][name]
         self.assertEqual(variant['layout'], 'overlay')
         for requested in ('ssh', 'tools', 'full'):
@@ -472,7 +472,7 @@ class FirmwareChecks(unittest.TestCase):
         self.assertTrue(self.run_checks(OVERLAY, changed=mixed)[0].startswith('RESULT:ssh:1:'))
 
     def test_base_navigation_calibration_template(self):
-        name = 'spark980-sdk4556-overlay20'
+        name = 'spark980-fw4556-overlay20'
         template = CATALOG['variants'][name]['navigation_calibration_template_sha256']
         script = installer.firmware_checks(CATALOG)
         start = script.index(' firmware_variant=' + name)

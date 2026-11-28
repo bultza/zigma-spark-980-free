@@ -29,7 +29,7 @@ layout=$(awk 'NR>1 {gsub(/"/,"",$4); printf "%s:%s;",$4,$2}' /proc/mtd)
 case "$layout" in
  'uboot:00100000;dtb:00010000;kernel:00300000;rootfs:00600000;data:015f0000;') layout=direct;;
  'uboot:00050000;dtb:00010000;kernel:00300000;rootfs:00800000;data:004a0000;firmware:01000000;') layout=overlay;;
- # SDK 4.5.56 resizes rootfs/firmware only; mounts and overlay semantics are unchanged.
+ # Firmware 4.5.56 resizes rootfs/firmware only; mounts and overlay semantics are unchanged.
  'uboot:00050000;dtb:00010000;kernel:00300000;rootfs:00400000;data:004a0000;firmware:01400000;') layout=overlay;;
  *) layout=unknown;;
 esac
@@ -80,7 +80,7 @@ if test "$profile" = full;then
  for command in "$firmware_wifi_bin/wpa_supplicant" "$firmware_wifi_bin/wpa_cli" /usr/bin/crontab /usr/sbin/crond; do
   test -x "$command" || fail "Missing full-profile dependency: $command"
  done
- # SDK 4.5.56 ships ntpdate only as /root/bin/ntpdate (firmware partition).
+ # Firmware 4.5.56 ships ntpdate only as /root/bin/ntpdate (firmware partition).
  test -x /usr/bin/ntpdate || test -x /root/bin/ntpdate || fail 'Missing full-profile dependency: ntpdate (/usr/bin or /root/bin)'
  for dir in /root/etc/crontabs; do safe_dir "$dir"; done
  for path in /root/hostname /root/.profile /root/etc/crontabs/root /root/bin/zigma-time-sync /root/etc/init.d/S01time /root/etc/init.d/S03zigma-hostname /root/etc/init.d/S04zigma-timezone /root/etc/init.d/S51hoslam /root/etc/init.d/S96ntpsync /root/etc/init.d/S97crond; do
