@@ -392,7 +392,9 @@ class FirmwareChecks(unittest.TestCase):
                 with self.subTest(path=path, value=value):
                     self.assertTrue(self.run_checks(OVERLAY, changed=changed)[0].startswith('RESULT:ssh:1:'))
         # Native pair alone cannot authorize a foreign base or Ciccia Wi-Fi.
-        for base in CATALOG['variants']:
+        for base, variant in CATALOG['variants'].items():
+            if (variant['files'][APP], variant['files'][NAV]) == (cp['files'][APP], cp['files'][NAV]):
+                continue  # a base that natively ships this exact pair is not foreign
             self.assertTrue(self.run_checks(base, changed={APP:cp['files'][APP], NAV:cp['files'][NAV]})[0].startswith('RESULT:ssh:1:'))
 
     def test_component_module_replacements_are_narrow(self):
@@ -446,6 +448,42 @@ class FirmwareChecks(unittest.TestCase):
             if mode == 'bad-hash': p['files'][APP] = 'bad'
             if mode == 'duplicate': ps.append(copy.deepcopy(p))
             if mode == 'overlap-native': p['files'][APP] = c['variants'][OVERLAY]['files'][APP]
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                installer.firmware_checks(c)
+
+    def test_fw4556_overlay20_exact_base(self):
+        name = 'spark980-fw4556-overlay20'
+        variant = CATALOG['variants'][name]
+        self.assertEqual(variant['layout'], 'overlay')
+        for requested in ('ssh', 'tools', 'full'):
+            result, output = self.run_checks(name, requested=requested)
+            self.assertEqual(result, 'RESULT:' + requested + ':0:/root/bin:/root/lib:/lib:/usr/lib')
+            self.assertIn('Firmware recognized: ' + name, output)
+        for path in variant['files']:
+            # The base profile tolerates an unknown ygclient hash with a warning.
+            values = (None,) if path == '/root/yg/ygclient' else (None, 'b'*64)
+            for value in values:
+                with self.subTest(path=path, value=value):
+                    self.assertTrue(self.run_checks(name, changed={path: value})[0].startswith('RESULT:ssh:1:'))
+        # Same app/navigation pair on the original Ciccia overlay base keeps its own decision.
+        ciccia = CATALOG['variants'][OVERLAY]
+        self.assertNotEqual(ciccia['files']['/dev/mtd3'], variant['files']['/dev/mtd3'])
+        mixed = {path: value for path, value in variant['files'].items() if not path.startswith('/dev/')}
+        self.assertTrue(self.run_checks(OVERLAY, changed=mixed)[0].startswith('RESULT:ssh:1:'))
+
+    def test_base_navigation_calibration_template(self):
+        name = 'spark980-fw4556-overlay20'
+        template = CATALOG['variants'][name]['navigation_calibration_template_sha256']
+        script = installer.firmware_checks(CATALOG)
+        start = script.index(' firmware_variant=' + name)
+        branch = script[start:script.index(' ;;', start)]
+        self.assertIn('firmware_calibration_template=' + template, branch)
+        self.assertTrue(branch.rstrip().endswith('firmware_calibration_template='))
+        for mode in ('bad-hash', 'no-nav-init', 'not-a-string'):
+            c = copy.deepcopy(CATALOG); v = c['variants'][name]
+            if mode == 'bad-hash': v['navigation_calibration_template_sha256'] = 'abc'
+            if mode == 'no-nav-init': v['files'].pop('/root/etc/init.d/S51hoslam')
+            if mode == 'not-a-string': v['navigation_calibration_template_sha256'] = ['a'*64]
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 installer.firmware_checks(c)
 

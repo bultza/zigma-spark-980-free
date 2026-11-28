@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-time-sync V1.1 (packaged 2026-10-28T08:30:44+00:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-time-sync V1.2 (packaged 2026-11-28T10:59:18+00:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Existing ntpdate, no resident daemon. Logs/status live in RAM only.
@@ -17,6 +17,10 @@ esac
 server=time.google.com
 [ ! -f /root/etc/ntp-server ] || server=$(cat /root/etc/ntp-server)
 case "$server" in ''|-*|*[!a-zA-Z0-9.-]*) exit 2;; esac
+# Original firmware: /usr/bin; firmware 4.5.56: /root/bin (firmware partition).
+ntpdate=/usr/bin/ntpdate
+[ -x "$ntpdate" ] || ntpdate=/root/bin/ntpdate
+[ -x "$ntpdate" ] || { printf failed > /tmp/zigma-time-sync.result; exit 1; }
 lock=/tmp/zigma-time-sync.lock
 mkdir "$lock" 2>/dev/null || exit 3
 printf running > /tmp/zigma-time-sync.result
@@ -37,7 +41,7 @@ while [ "$attempt" -le "$attempts" ]; do
     printf 'attempt=%s uptime=%s\n' "$attempt" "$(cat /proc/uptime)"
     # -u: unprivileged source UDP port; -t: response timeout per server.
     # Watchdog also bounds DNS resolution, which -t alone does not cover.
-    /usr/bin/ntpdate -u -p 1 -t 3 $step "$server" &
+    "$ntpdate" -u -p 1 -t 3 $step "$server" &
     child=$!
     (
         timer=

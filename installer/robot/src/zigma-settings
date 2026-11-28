@@ -1,7 +1,7 @@
 #!/bin/sh
 # BEGIN ZIGMA VERSION
 if [ "$#" -eq 1 ];then
- case "$1" in -v|--version) printf '%s\n' 'zigma-settings V1.3 (packaged 2026-11-08T20:48:10+00:00)';exit 0;;esac
+ case "$1" in -v|--version) printf '%s\n' 'zigma-settings V1.4 (packaged 2026-11-28T10:59:18+00:00)';exit 0;;esac
 fi
 # END ZIGMA VERSION
 # Settings adapter for both reviewed layouts, including a clean installation.
@@ -73,7 +73,7 @@ case "${1:-}" in
   ;;
  ntp_sync)
   test -x /root/bin/zigma-time-sync
-  test -x /usr/bin/ntpdate
+  test -x /usr/bin/ntpdate || test -x /root/bin/ntpdate
   [ ! -d /tmp/zigma-time-sync.lock ] || exit 3
   printf requested > /tmp/zigma-time-sync.result
   nohup /root/bin/zigma-time-sync manual </dev/null >/dev/null 2>&1 &

@@ -197,6 +197,36 @@
         }
       ]
     },
+    "spark980-fw4556-overlay20": {
+      "layout": "overlay",
+      "wifi_bin": "/root/bin",
+      "wifi_libs": "/root/lib:/lib:/usr/lib",
+      "files": {
+        "/dev/mtd1": "652c14660784553f295bf7190e81725a2ea7c50ea30a2ad3dd284b5d025b7521",
+        "/dev/mtd2": "8b7e32c3cdfc1e7487249ba95a454df9867747a7c0c7c2018b614355c3ef7b8a",
+        "/dev/mtd3": "b3e2dc6afc1a57ab13dd1dafff74e158b6d0cfb280c7bbee40d3a7f01e271efc",
+        "/usr/sbin/dropbear": "4384269322e256de64f34cbff3d3a9f08735f86e5a4a27daff3997ad3dcbff06",
+        "/bin/busybox": "101dbf222f6ba88368242e9ce8f83ea90aa3b114772ac3ab70bb0a71c73cbccf",
+        "/etc/init.d/S70user": "dcfe47f7fda31f66bcef490719aff2eb9ac635bfd8a954162367e03acedad2d4",
+        "/etc/inittab": "1fa0bd9865c42c44fa045f63abe7b91fe975180c94964ca32f02cb9f0e4a22b4",
+        "/root/yg/ygclient": "2bc882825a5d8d56286f5f792add41a842593d292ee059317ff2d3fbc8c95d2e",
+        "/root/app_server/daemon": "2f542c25fa1ae967b796467f3bb99f6f75f889b674bf6fe8d1c7f82ea191306e",
+        "/root/app_server/wifi_app_server_grit": "8084000b686d071f8f0590448087ff88d71deee3e55e772c86d41f27d704516c",
+        "/root/hoslam/demo_rplidar": "1b2751efd2a4d5afc208fce099401d90c581f0cec41cfe440e9a39d519ece664",
+        "/root/bin/wpa_supplicant": "45b23ee81401f80def60690441d2afb0c18e8d2c27240452b938e1c1ee45f22c",
+        "/root/firmware/arobot/modules/8723ds.ko": "7458199f2da7f87a6c2d06f60e4b2f8a7396883f7cf4b035c792c4a585c3dcc9",
+        "/root/lib/libnl.so.1": "5286469bf4c3720c1126c2b54f6a0f2e648b7dc738ef91fffeb1edae488ad08f",
+        "/root/bin/hold380": "8a5a2538c5b21b6916867b2ea4173d45b2a1d9fafbcc16e1f66eb37f7f536e58",
+        "/root/etc/init.d/S70yg": "f35a6e787454ff4f9470f60fd23dd56c91841654f83b14b6f9f107dc5491735e",
+        "/root/etc/init.d/S99daemon": "de2d94a390b0f1bffda89f51d2a65b1c0a2b0b485c29cb0c5d55103d22838576",
+        "/root/etc/init.d/S35prepare": "45978edb827d6d9a6599e0a7623e2a436af5b1a8e88d80de269ce2c1770331d5",
+        "/root/etc/init.d/S50app": "756e79e9c201c1eb8c55cd6e26a26faa0dc5885a4d4b5193f10f74895a66592e",
+        "/root/etc/init.d/S51hoslam": "c6c43421c63e2b9850859038c5b1f7b49b01c6e172a259a94bb2013398abc1bc",
+        "/root/etc/init.d/S60wifi": "caec448ba14a2849218f900e6dbca87000e7a6ce79e2b3253ee251c9644a450f"
+      },
+      "navigation_calibration_template_sha256": "ae34c42ee68144c45f72cbb5fda55df743ce6ace2736328d3f7c6fcc390d9e9b",
+      "note": "Spark 980 / X8 firmware 4.5.56 (SDK 4.5.49 per OTA image name, kernel 4.14.14 #34). Overlay layout with 4 MiB rootfs and 20 MiB firmware. Issue04/Issue06 Russian app/navigation pair with RTL8723DS; daemon, libnl and startup scripts differ from issue04-russian-original. Hashes from a verified NOR dump; S51hoslam numeric calibration is device-specific."
+    },
     "direct-kernel16": {
       "layout": "direct",
       "wifi_bin": "/usr/bin",

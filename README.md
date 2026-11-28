@@ -19,7 +19,7 @@ Daily cleaning schedules run on the robot's own clock, so they work even without
 The installer will be able to access and expose the SSH of your robots for these models, however the "Free-Zigma" app will depend on the status of the project.
 
 ### Fully compatible models
-- **Zigma Spark-980** - Working in four different known software variants and 2 different hardware (Issue 10) variants 
+- **Zigma Spark-980** - Working in five different known software variants and 2 different hardware (Issue 10) variants
 - **Puron PR10** - Working in two different software variants (See Issue 03 and 01b)
 - **RoboJet X-One** - Working in one software variant (See Issue 08)
 - **OKAMI U100 Plus** - Working in one software variant (See Issue 09)

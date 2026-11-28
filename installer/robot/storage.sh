@@ -1,10 +1,15 @@
 #!/bin/sh
-# S02zigma-storage V1.0 (modular installer adapter)
-# Storage adapter for the reviewed 32 MiB overlay + 16 MiB firmware layout.
+# S02zigma-storage V1.1 (modular installer adapter)
+# Storage adapter for the reviewed 32 MiB overlay layouts: 8 MiB rootfs +
+# 16 MiB firmware (original), or 4 MiB rootfs + 20 MiB firmware (firmware 4.5.56).
 set -eu
 case "${1:-}" in start) :;;stop) exit 0;;*) exit 2;;esac
+test "$(cat /sys/class/mtd/mtd3/name)" = rootfs
 test "$(cat /sys/class/mtd/mtd5/name)" = firmware
-test "$(cat /sys/class/mtd/mtd5/size)" = 16777216
+case "$(cat /sys/class/mtd/mtd3/size):$(cat /sys/class/mtd/mtd5/size)" in
+ 8388608:16777216|4194304:20971520) :;;
+ *) exit 1;;
+esac
 awk '$1=="/dev/mtdblock5" && $2=="/root/firmware/arobot" && $3=="jffs2" {ok=1} END{exit !ok}' /proc/mounts
 store=/root/firmware/arobot/zigma-free
 test -d "$store" && test ! -L "$store"
