@@ -77,9 +77,11 @@ elif test "$layout" = direct;then
 fi
 already=0
 if test "$profile" = full;then
- for command in "$firmware_wifi_bin/wpa_supplicant" "$firmware_wifi_bin/wpa_cli" /usr/bin/ntpdate /usr/bin/crontab /usr/sbin/crond; do
+ for command in "$firmware_wifi_bin/wpa_supplicant" "$firmware_wifi_bin/wpa_cli" /usr/bin/crontab /usr/sbin/crond; do
   test -x "$command" || fail "Missing full-profile dependency: $command"
  done
+ # SDK 4.5.56 ships ntpdate only as /root/bin/ntpdate (firmware partition).
+ test -x /usr/bin/ntpdate || test -x /root/bin/ntpdate || fail 'Missing full-profile dependency: ntpdate (/usr/bin or /root/bin)'
  for dir in /root/etc/crontabs; do safe_dir "$dir"; done
  for path in /root/hostname /root/.profile /root/etc/crontabs/root /root/bin/zigma-time-sync /root/etc/init.d/S01time /root/etc/init.d/S03zigma-hostname /root/etc/init.d/S04zigma-timezone /root/etc/init.d/S51hoslam /root/etc/init.d/S96ntpsync /root/etc/init.d/S97crond; do
   test ! -L "$path" || fail "Conflicting support symlink: $path"

@@ -67,7 +67,21 @@ vendor OTA. Earlier Zigma transactions changed only `authorized_keys` and
   base calibration-template validation.
 - `installer/BUILD.md`: profile notes.
 
+### Follow-up after the first robot run
+
+The first run recognized the firmware but stopped with `Missing full-profile
+dependency: /usr/bin/ntpdate`. On 4.5.56, `ntpdate` exists only as
+`/root/bin/ntpdate` (a link into the firmware partition).
+
+- `install.sh.in`: accepts `ntpdate` from `/usr/bin` or `/root/bin`.
+- `zigma-time-sync` V1.2 and `zigma-settings` V1.4: use the same fallback.
+- Version bumps: `S02zigma-storage` V1.1 and `zigma-nor-backup-arm` V1.1 for the
+  earlier changes. `versions.json` and the generated header are updated.
+- A sweep of every other tool the scripts require found nothing else missing.
+
 ## Verification
+
+Offline:
 
 - Installer suite: 150 tests pass (run with `installer/computer/.wizard-venv`).
 - The generated firmware gate, run against the real files from the dump, passes
@@ -80,13 +94,39 @@ vendor OTA. Earlier Zigma transactions changed only `authorized_keys` and
 - Layout detection in `install.sh.in` and `upgrade.py` returns `overlay` for
   this robot's `/proc/mtd`.
 
+On the robot (2026-11-28, session `ZigmaSpark980-20261128-115412`):
+
+- Pairing, hosts protection and persistent SSH succeeded.
+- A new NOR backup was verified with two complete reads (SHA-256 `8ba81b2a…`).
+  It differs from the first dump (`f67cf620…`) because the data partition
+  changed between the two backups.
+- All 21 firmware checks passed and the robot was recognized as
+  `spark980-sdk4556-overlay20`.
+- The full install then stopped at `Missing full-profile dependency:
+  /usr/bin/ntpdate`. This is fixed by the `ntpdate` fallback commit below.
+
+## Build and package
+
+- ARM binaries rebuilt with the toolchain in the repo (`make -C src/robot` and
+  `make -C src/robot zigma-nor-backup-arm`).
+- Package: `dist/zigma-deployment-v1.1-rc22-sdk4556.tar.gz` (and `.zip`), built
+  with `python3 src/package-release.py --label v1.1-rc22-sdk4556`. It contains
+  the new profile, the layout detection and the `ntpdate` fallback.
+
+## Commits (branch `v4.5.56`)
+
+- `127cfb6` research: first hashes for v4.5.56
+- `81c9f76` new overlay profile, geometry detection, storage hook, NOR reader,
+  tests
+- "Accept ntpdate from /root/bin on SDK 4.5.56 firmware": `ntpdate` fallback and version bumps
+
 ## Open items
 
-- Rebuild the ARM binaries so the NOR reader change is included. The installer
-  and catalog changes need no rebuild.
-- If `/root/.zigma-install/pending` is still on the robot, the installer will
-  refuse to run until it is removed. The dump was taken while an SSH install was
-  running, and that install is recorded as completed.
+- Retry the full install with the rebuilt package. The pending-transaction check
+  runs after the dependency check, so it has not been exercised yet. If
+  `/root/.zigma-install/pending` is still on the robot, the installer will refuse
+  to run until it is removed.
 - Upgrades do not replace `S02zigma-storage`, so the storage change applies to
   new installs only.
-- A full install and physical cleaning have not been tested on this robot yet.
+- Activation of local mode, the web UI, maps and physical cleaning have not been
+  tested on this robot yet.

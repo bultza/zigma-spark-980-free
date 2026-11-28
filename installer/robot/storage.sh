@@ -1,5 +1,5 @@
 #!/bin/sh
-# S02zigma-storage V1.0 (modular installer adapter)
+# S02zigma-storage V1.1 (modular installer adapter)
 # Storage adapter for the reviewed 32 MiB overlay layouts: 8 MiB rootfs +
 # 16 MiB firmware (original), or 4 MiB rootfs + 20 MiB firmware (SDK 4.5.56).
 set -eu
